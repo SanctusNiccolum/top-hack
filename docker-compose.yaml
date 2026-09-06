@@ -23,9 +23,13 @@ services:
   #     - minio_data_hack:/data
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - .env
+    environment:
+      - TELEGRAM_PARSER_CWD=/app
     depends_on:
       - db
 

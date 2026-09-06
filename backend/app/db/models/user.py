@@ -22,6 +22,18 @@ class UserModel(Base):
         nullable=False,
     )
 
+    # Реальный numeric Telegram ID (me.id) — заполняется после успешного
+    # прохождения /telegram/login/*. НЕ совпадает с user_id (тот — внутренний
+    # SQL-идентификатор, назначается при регистрации по телефону, задолго до
+    # того, как пользователь вообще даёт согласие на подключение Telegram).
+    # Нужен, чтобы связать таблицы telegram_parser (messages/parse_state/...,
+    # ключ там — tg_user_id) с этим пользователем бэкенда.
+    tg_user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        nullable=True,
+        unique=True,
+    )
+
 
     age: Mapped[int] = mapped_column(Integer, nullable=True)
     city: Mapped[str] = mapped_column(String(30), nullable=True)
