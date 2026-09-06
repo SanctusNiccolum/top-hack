@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { login, register } from '../api';
 import PropTypes from 'prop-types';
 import styled from 'styled-components';
 
@@ -193,19 +194,40 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
     if (!email) nextErrors.email = 'Введите email';
     else if (!/\S+@\S+\.\S+/.test(email)) nextErrors.email = 'Некорректный email';
     if (!password) nextErrors.password = 'Введите пароль';
-    else if (password.length < 6) nextErrors.password = 'Пароль должен быть не менее 6 символов';
+    // 8 символов — требование бэкенда (RegisterRequest), с 6 он ответит 422.
+    else if (password.length < 8) nextErrors.password = 'Пароль должен быть не менее 8 символов';
     if (password !== confirmPassword) nextErrors.confirmPassword = 'Пароли не совпадают';
     if (!agree) nextErrors.agree = 'Необходимо согласие на обработку данных';
     return nextErrors;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const nextErrors = validate();
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
     }
+
+    // Регистрируем пользователя на бэкенде и сохраняем токен: без него
+    // все последующие запросы (анкета, выписка, Telegram) вернут 401.
+    try {
+      await register(phone.trim(), password);
+    } catch (err) {
+      if (err.status === 409) {
+        // Такой номер уже зарегистрирован — пробуем войти тем же паролем.
+        try {
+          await login(phone.trim(), password);
+        } catch (loginErr) {
+          setErrors({ phone: loginErr.message });
+          return;
+        }
+      } else {
+        setErrors({ phone: err.message });
+        return;
+      }
+    }
+
     onSuccess({ email, phone: phone.trim(), fullName: fullName.trim() });
     onClose();
     setFullName('');

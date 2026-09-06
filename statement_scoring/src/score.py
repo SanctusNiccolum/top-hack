@@ -55,9 +55,24 @@ def _load_model():
 
     if pkl_path.exists():
         import pickle
+        import warnings
 
-        with open(pkl_path, "rb") as fh:
-            model = pickle.load(fh)
+        try:
+            with open(pkl_path, "rb") as fh:
+                model = pickle.load(fh)
+        except Exception as exc:
+            # Пикл модели привязан к версии sklearn, которой его солили:
+            # на другой версии он падает (ModuleNotFoundError: '_loss' и
+            # подобное). Это не повод ронять весь расчёт — ниже по коду
+            # backend=None означает «считаем только по формуле».
+            # Лечится переобучением: python train_model.py
+            warnings.warn(
+                f"Не удалось загрузить {pkl_path.name} ({exc}). "
+                "Считаю только по формуле. Переобучите модель: "
+                "python train_model.py",
+                RuntimeWarning,
+            )
+            return None, None, None
 
         def predict(X: pd.DataFrame) -> np.ndarray:
             return model.predict(X)

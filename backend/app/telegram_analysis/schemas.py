@@ -52,3 +52,18 @@ class TelegramChat(BaseModel):
 
 class TelegramChatsResponse(BaseModel):
     chats: list[TelegramChat]
+
+
+class TelegramChatStatus(BaseModel):
+    chat_id: int
+    # "success" | "failed" | None (ещё в работе)
+    status: str | None
+    error_message: str | None
+
+
+class TelegramStatusResponse(BaseModel):
+    # "not_started" | "in_progress" | "done" | "failed"
+    status: str
+    chats: list[TelegramChatStatus]
+    messages_collected: int
+    subscriptions_collected: int

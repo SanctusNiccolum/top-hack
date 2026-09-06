@@ -60,7 +60,7 @@ class ReportService:
         report = (
             await self.report_repository.create_or_update(
                 user_id=user.user_id,
-                score=score,
+                survey_score=score,
                 date=datetime.now(timezone.utc),
             )
         )

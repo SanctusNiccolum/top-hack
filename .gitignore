@@ -10,3 +10,9 @@ wheels/
 .venv
 
 .env
+
+# генерируется backend/make_test_statement.py
+backend/test_statement.pdf
+
+# Node
+node_modules/

@@ -8,6 +8,7 @@ from sqlalchemy import pool
 from alembic import context
 from app.db.models.user import UserModel, UserSubscriptionModel
 from app.db.models.report import ReportModel
+from app.db.models.consent import ConsentModel
 
 from app.db.base import Base
 

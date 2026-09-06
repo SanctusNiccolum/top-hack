@@ -46,4 +46,7 @@ async def create_report(
         score=report.score,
         date=report.date,
         comment_from_ai=report.comment_from_ai,
+        survey_score=report.survey_score,
+        statement_score=report.statement_score,
+        telegram_score=report.telegram_score,
     )

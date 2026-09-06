@@ -9,3 +9,15 @@ pwdlib[argon2]
 pydantic>=2.9.0
 asyncpg==0.29.0
 telethon>=1.44.0
+# Нужен FastAPI для приёма multipart/form-data (загрузка PDF-выписки).
+python-multipart>=0.0.9
+
+# Зависимости statement_scoring/ — он живёт в этом же образе и
+# запускается подпроцессом (см. app/statement_scoring/runner.py).
+# catboost намеренно НЕ ставим: обученная модель лежит в .pkl
+# (sklearn_hgb, см. statement_scoring/model/meta.json), а catboost добавил
+# бы сотни МБ в образ ради неиспользуемого бэкенда.
+pandas>=2.0
+numpy>=1.24
+pdfplumber>=0.10
+scikit-learn==1.9.0

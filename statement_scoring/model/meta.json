@@ -27,8 +27,8 @@
   "backend": "sklearn_hgb",
   "metrics": {
     "backend": "sklearn_hgb",
-    "mae": 1.255,
-    "r2": 0.9401,
+    "mae": 1.25,
+    "r2": 0.9406,
     "n_train": 4800,
     "n_test": 1200
   }

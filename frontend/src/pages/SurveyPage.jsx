@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { calculateRating } from '../utils/calculateRating';
+import { completeAccount, updateAccount } from '../api';
+import { surveyToAccount } from '../utils/surveyToAccount';
 
 const SurveyPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentStep, setCurrentStep] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [answers, setAnswers] = useState({
     age: '',
     city: '',
@@ -19,6 +22,7 @@ const SurveyPage = () => {
     incomeFrequency: '',
     incomeStatement: null,
     creditHistory: '',
+    monthlyPayments: '',
     paymentMethod: '',
     paymentOther: '',
     overdue: '',
@@ -47,18 +51,33 @@ const SurveyPage = () => {
     setAnswers((prev) => ({ ...prev, [field]: file }));
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     if (currentStep < totalSteps - 1) {
       setCurrentStep((prev) => prev + 1);
-    } else {
-      const rating = calculateRating(answers);
-      const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const user = { ...storedUser, ...(location.state?.user || {}) };
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('rating', JSON.stringify(rating));
-      localStorage.setItem('surveyAnswers', JSON.stringify(answers));
-      navigate('/rating', { state: { user, answers, rating } });
+      return;
     }
+
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = { ...storedUser, ...(location.state?.user || {}) };
+
+    // Отправляем анкету на бэкенд: скор считает он, а не клиент.
+    // Ответы дублируем в localStorage — их читают экраны профиля для
+    // отображения (сами по себе они на скор больше не влияют).
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      await updateAccount(surveyToAccount(answers, user));
+      await completeAccount();
+    } catch (err) {
+      setSubmitError(err.message);
+      setSubmitting(false);
+      return;
+    }
+    setSubmitting(false);
+
+    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('surveyAnswers', JSON.stringify(answers));
+    navigate('/rating', { state: { user, answers } });
   };
 
   const goBack = () => {
@@ -84,6 +103,7 @@ const SurveyPage = () => {
         if (!answers.creditHistory) errors.push('Кредитная история');
         if (!answers.paymentMethod) errors.push('Способ оплаты');
         if (!answers.overdue) errors.push('Просрочки');
+        if (!answers.monthlyPayments.trim()) errors.push('Ежемесячные платежи по кредитам');
         break;
       case 3:
         if (!answers.tgLink.trim()) errors.push('Ссылка на Telegram');
@@ -127,10 +147,17 @@ const SurveyPage = () => {
           <button className="survey-back" onClick={goBack} disabled={currentStep === 0} aria-label="Назад">
             ←
           </button>
-          <button className="survey-next" onClick={goNext} disabled={!valid}>
-            {currentStep === totalSteps - 1 ? 'Завершить' : 'Далее ->'}
+          <button className="survey-next" onClick={goNext} disabled={!valid || submitting}>
+            {submitting
+              ? 'Сохраняем…'
+              : currentStep === totalSteps - 1 ? 'Завершить' : 'Далее ->'}
           </button>
         </div>
+        {submitError && (
+          <p className="form-error" role="alert" style={{ marginTop: '0.8rem' }}>
+            Не удалось сохранить анкету: {submitError}
+          </p>
+        )}
         </div>
       </div>
     </div>
@@ -388,6 +415,20 @@ const Step3 = ({ answers, onChange }) => {
         )}
       </div>
 
+      <div style={{ marginBottom: '1.5rem' }}>
+        <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.3rem' }}>
+          Сколько вы ежемесячно платите по кредитам, займам и рассрочкам? (в рублях, 0 — если ничего)
+        </label>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={answers.monthlyPayments}
+          onChange={(e) => onChange('monthlyPayments', e.target.value)}
+          placeholder="0"
+          style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #ced4da' }}
+        />
+      </div>
+
       <div>
         <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>Бывали ли у вас просрочки по платежам?</label>
         {['Да, были пару раз', 'Нет, никогда', 'Не знаю/не уверен(а)'].map((opt) => (
@@ -438,8 +479,11 @@ const Step4 = ({ answers, onChange, onFileUpload, onCheckboxChange }) => {
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.8rem', cursor: 'pointer' }}>
           <input
             type="checkbox"
-            checked={answers.agreeToTerms}
-            onChange={() => onCheckboxChange('agreeToTerms', !answers.agreeToTerms)}
+            checked={Boolean(answers.agreeToTerms)}
+            // onCheckboxChange здесь не подходит: он для ГРУПП чекбоксов и
+            // хранит значение массивом, из-за чего булев флаг только
+            // включался и никогда не снимался (массив оставался непустым).
+            onChange={(event) => onChange('agreeToTerms', event.target.checked)}
             style={{ marginTop: '3px' }}
           />
           <span>

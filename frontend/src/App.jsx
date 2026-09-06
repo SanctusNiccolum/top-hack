@@ -9,6 +9,7 @@ import AccountPage from './pages/AccountPage';
 import ProfilePage from './pages/ProfilePage';
 import RatingPage from './pages/RatingPage';
 import SurveyPage from './pages/SurveyPage';
+import StatementUploadPage from './pages/StatementUploadPage';
 import TelegramAnalysisPage from './pages/TelegramAnalysisPage';
 
 
@@ -274,6 +275,7 @@ export default function App(props) {
       <Route path="/profile" element={isAuthenticated ? <AccountPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
       <Route path="/rating" element={isAuthenticated ? <RatingPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
       <Route path="/telegram-analysis" element={isAuthenticated ? <TelegramAnalysisPage /> : <Navigate to="/" replace />} />
+      <Route path="/statement" element={isAuthenticated ? <StatementUploadPage /> : <Navigate to="/" replace />} />
       <Route path="*" element={homePage} />
     </Routes>
   );

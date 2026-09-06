@@ -15,6 +15,13 @@ class ReportCreateRequest(BaseModel):
 
 class ReportResponse(BaseModel):
     user_id: int
+    # Итоговый скор — взвешенная комбинация веток ниже.
     score: Decimal
     date: datetime
     comment_from_ai: str | None
+
+    # Разбивка по веткам (NULL — ветка ещё не считалась). Нужна фронту,
+    # чтобы показать, из чего сложился итог.
+    survey_score: Decimal | None = None
+    statement_score: Decimal | None = None
+    telegram_score: Decimal | None = None

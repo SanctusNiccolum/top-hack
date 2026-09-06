@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, get_user_repository
+from app.db.models.consent import ConsentModel
 from app.db.models.user import UserModel
 from app.db.repositories.user import UserRepository
 from app.db.session import get_session
@@ -13,6 +15,8 @@ from app.telegram_analysis.schemas import (
     TelegramAnalyzeResponse,
     TelegramChatsRequest,
     TelegramChatsResponse,
+    TelegramChatStatus,
+    TelegramStatusResponse,
     TelegramLoginCodeRequest,
     TelegramLoginPasswordRequest,
     TelegramLoginPhoneRequest,
@@ -153,6 +157,82 @@ async def chats(
     return TelegramChatsResponse(chats=chats_list)
 
 
+@router.get(
+    "/status",
+    response_model=TelegramStatusResponse,
+)
+async def analyze_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Прогресс разбора чатов текущего пользователя.
+
+    Читает таблицы, которые пишет telegram_parser. Связка идёт через
+    user_profile.tg_user_id — в таблицах парсера ключ это НЕ наш
+    внутренний user_id, а реальный numeric Telegram ID.
+    """
+    if current_user.tg_user_id is None:
+        return TelegramStatusResponse(
+            status="not_started",
+            chats=[],
+            messages_collected=0,
+            subscriptions_collected=0,
+        )
+
+    tg_id = current_user.tg_user_id
+
+    rows = (
+        await db.execute(
+            text(
+                "SELECT chat_id, status, error_message "
+                "FROM parse_state WHERE user_id = :tg_id"
+            ),
+            {"tg_id": tg_id},
+        )
+    ).all()
+
+    messages_count = (
+        await db.execute(
+            text("SELECT count(*) FROM messages WHERE user_id = :tg_id"),
+            {"tg_id": tg_id},
+        )
+    ).scalar_one()
+
+    subscriptions_count = (
+        await db.execute(
+            text("SELECT count(*) FROM subscriptions WHERE user_id = :tg_id"),
+            {"tg_id": tg_id},
+        )
+    ).scalar_one()
+
+    chats = [
+        TelegramChatStatus(
+            chat_id=row.chat_id,
+            status=row.status,
+            error_message=row.error_message,
+        )
+        for row in rows
+    ]
+
+    if not chats:
+        # Логин прошёл (tg_user_id есть), но парсер ещё не создал ни одной
+        # строки — либо он только стартовал, либо анализ не запускали.
+        overall = "not_started"
+    elif any(chat.status is None for chat in chats):
+        overall = "in_progress"
+    elif all(chat.status == "failed" for chat in chats):
+        overall = "failed"
+    else:
+        overall = "done"
+
+    return TelegramStatusResponse(
+        status=overall,
+        chats=chats,
+        messages_collected=messages_count,
+        subscriptions_collected=subscriptions_count,
+    )
+
+
 @router.post(
     "/analyze",
     response_model=TelegramAnalyzeResponse,
@@ -160,6 +240,7 @@ async def chats(
 )
 async def analyze(
     data: TelegramAnalyzeRequest,
+    db: AsyncSession = Depends(get_session),
     # Авторизация переиспользует общую сессионную схему сервиса — это не
     # telegram-логин, а обычный bearer-токен нашего API. Сам parser не
     # знает про current_user.user_id: он всегда определяет свой user_id из
@@ -167,6 +248,25 @@ async def analyze(
     # парсера, не баг — см. tg_user_id на UserModel для связки задним числом.
     current_user: UserModel = Depends(get_current_user),
 ):
+    # Разбор личной переписки допустим только по явному согласию — без
+    # действующей записи в consent анализ не запускаем.
+    consent = await db.execute(
+        select(ConsentModel).where(
+            ConsentModel.user_id == current_user.user_id,
+            ConsentModel.consent_type == "telegram_analysis",
+            ConsentModel.revoked_at.is_(None),
+        )
+    )
+
+    if consent.scalars().first() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Нет согласия на анализ Telegram. Сначала вызовите "
+                'POST /consent {"consent_type": "telegram_analysis"}'
+            ),
+        )
+
     try:
         await start_parser(
             session_string=data.session_string,

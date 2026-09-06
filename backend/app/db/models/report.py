@@ -16,9 +16,30 @@ class ReportModel(Base):
         primary_key=True,
     )
 
+    # Итоговый скор — взвешенная комбинация веток ниже
+    # (см. app/services/score_combination.py).
     score: Mapped[float] = mapped_column(
         Numeric(5, 2),
         nullable=False,
+    )
+
+    # Скоры по каждой ветке отдельно, все в шкале 0..100. NULL = ветка
+    # ещё не считалась (например, пользователь не загрузил выписку) —
+    # такие ветки в комбинацию не входят, а их вес распределяется на
+    # остальные.
+    survey_score: Mapped[float | None] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
+    )
+
+    statement_score: Mapped[float | None] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
+    )
+
+    telegram_score: Mapped[float | None] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
     )
 
     date: Mapped[datetime] = mapped_column(

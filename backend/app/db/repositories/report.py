@@ -1,9 +1,11 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.report import ReportModel
+from app.services.score_combination import combine_scores
 
 
 class ReportRepository:
@@ -27,65 +29,54 @@ class ReportRepository:
 
         return result.scalar_one_or_none()
 
-    async def create(
-        self,
-        user_id: int,
-        score,
-        date: datetime,
-    ) -> ReportModel:
-
-        report = ReportModel(
-            user_id=user_id,
-            score=score,
-            date=date,
-            comment_from_ai=None,
-        )
-
-        self.db.add(report)
-
-        await self.db.flush()
-
-        return report
-
-    async def update(
-        self,
-        report: ReportModel,
-        score,
-        date: datetime,
-    ) -> ReportModel:
-
-        report.score = score
-        report.date = date
-
-        # Пока AI-комментария нет.
-        # При следующем пересчёте старый комментарий
-        # не сохраняем.
-        report.comment_from_ai = None
-
-        await self.db.flush()
-
-        return report
-
     async def create_or_update(
         self,
         user_id: int,
-        score,
         date: datetime,
+        survey_score: Decimal | None = None,
+        statement_score: Decimal | None = None,
+        telegram_score: Decimal | None = None,
+        comment_from_ai: str | None = None,
     ) -> ReportModel:
+        """Обновляет ТОЛЬКО переданные ветки, остальные оставляет как есть.
 
-        report = await self.get_by_user_id(
-            user_id
-        )
+        Ветки считаются в разное время и разными эндпоинтами (анкета,
+        выписка, telegram), поэтому перезаписывать отчёт целиком нельзя:
+        загрузка выписки не должна стирать уже посчитанную анкету.
+        """
+        report = await self.get_by_user_id(user_id)
 
         if report is None:
-            return await self.create(
+            report = ReportModel(
                 user_id=user_id,
-                score=score,
+                score=Decimal("0"),
                 date=date,
             )
+            self.db.add(report)
 
-        return await self.update(
-            report=report,
-            score=score,
-            date=date,
+        if survey_score is not None:
+            report.survey_score = survey_score
+
+        if statement_score is not None:
+            report.statement_score = statement_score
+
+        if telegram_score is not None:
+            report.telegram_score = telegram_score
+
+        if comment_from_ai is not None:
+            report.comment_from_ai = comment_from_ai
+
+        combined = combine_scores(
+            report.survey_score,
+            report.statement_score,
+            report.telegram_score,
         )
+
+        if combined is not None:
+            report.score = combined
+
+        report.date = date
+
+        await self.db.flush()
+
+        return report

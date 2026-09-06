@@ -20,6 +20,10 @@ COPY backend/app/db/migrations /app/db/migrations
 # отдельный контейнер) — см. backend/app/telegram_analysis/runner.py.
 COPY telegram_parser/telegram_parser ./telegram_parser
 
+# Скоринг по банковской выписке — тоже подпроцессом из этого же образа
+# (см. app/statement_scoring/runner.py). Нужны и src/, и обученная модель.
+COPY statement_scoring ./statement_scoring
+
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]

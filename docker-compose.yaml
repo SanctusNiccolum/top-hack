@@ -30,6 +30,11 @@ services:
       - .env
     environment:
       - TELEGRAM_PARSER_CWD=/app
+      - STATEMENT_SCORING_DIR=/app/statement_scoring/src
+      - STATEMENT_UPLOAD_DIR=/app/uploads
+    volumes:
+      # Загруженные выписки переживают пересборку контейнера.
+      - statement_uploads:/app/uploads
     depends_on:
       - db
 
@@ -39,3 +44,4 @@ services:
 volumes:
   # minio_data_hack:
   postgres_data:
+  statement_uploads:
