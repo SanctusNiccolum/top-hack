@@ -1,9 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
 import { onCLS, onINP, onLCP } from 'web-vitals';
 import { themeConfig } from './theme/config.js';
 import RegistrationModal from './components/RegistrationModal';
+import AccountPage from './pages/AccountPage';
+import ProfilePage from './pages/ProfilePage';
+import RatingPage from './pages/RatingPage';
+import SurveyPage from './pages/SurveyPage';
+import TelegramAnalysisPage from './pages/TelegramAnalysisPage';
 
 
 const fadeUp = keyframes`
@@ -80,8 +86,8 @@ function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight
             <h1>Платформа управления<br className="desktop" /> своим рейтингом<br className="desktop" /> платежеспособности</h1>
             <p className="hero-lead">Пройдите короткий опрос —<br className="desktop" /> и за 5 минут узнайте, по плечу ли Вам кредит.</p>
             <div className="hero-actions">
-              <Button onClick={onOpenRegistration} fontSize={buttonFontSize} paddingX={buttonPaddingX} paddingY={buttonPaddingY} radius={buttonRadius}>Пройти опрос</Button>
-              <Button onClick={onOpenRegistration} variant="yellow" fontSize={buttonFontSize} paddingX={buttonPaddingX} paddingY={buttonPaddingY} radius={buttonRadius}>Вход</Button>
+                  <Button onClick={onOpenRegistration} fontSize={16} paddingX={24} paddingY={13} radius={buttonRadius}>Пройти опрос</Button>
+                  <Button onClick={onOpenRegistration} variant="yellow" fontSize={16} paddingX={24} paddingY={13} radius={buttonRadius}>Вход</Button>
             </div>
             <p className="privacy">Бесплатно·Конфиденциально</p>
           </div>
@@ -164,7 +170,7 @@ const faqs = [
   ['Через сколько появятся результаты оценки?', 'Основной результат можно показать сразу после завершения анкеты; дополнительные рекомендации появляются по мере обработки данных.']
 ];
 
-function FAQ({ sectionTitleSize, sectionPaddingTop, sectionPaddingBottom, cardWidth, cardRadius, rowHeight, questionSize, answerSize, ctaWidth, ctaRadius, ctaPaddingX, ctaPaddingY, ctaTitleSize, ctaButtonSize, ctaButtonPaddingX, ctaButtonPaddingY, ctaButtonRadius }) {
+function FAQ({ sectionTitleSize, sectionPaddingTop, sectionPaddingBottom, cardWidth, cardRadius, rowHeight, questionSize, answerSize, ctaWidth, ctaRadius, ctaPaddingX, ctaPaddingY, ctaTitleSize, ctaButtonSize, ctaButtonPaddingX, ctaButtonPaddingY, ctaButtonRadius, onOpenRegistration }) {
   return (
     <section className="faq-section" aria-labelledby="faq-title" style={{ '--section-title-size': `${sectionTitleSize}px`, '--faq-top': `${sectionPaddingTop}px`, '--faq-bottom': `${sectionPaddingBottom}px`, '--faq-width': `${cardWidth}px`, '--faq-radius': `${cardRadius}px`, '--faq-row': `${rowHeight}px`, '--question-size': `${questionSize}px`, '--answer-size': `${answerSize}px`, '--cta-width': `${ctaWidth}px`, '--cta-radius': `${ctaRadius}px`, '--cta-x': `${ctaPaddingX}px`, '--cta-y': `${ctaPaddingY}px`, '--cta-title': `${ctaTitleSize}px` }}>
       <Section>
@@ -174,7 +180,7 @@ function FAQ({ sectionTitleSize, sectionPaddingTop, sectionPaddingBottom, cardWi
         </div>
         <div className="cta-card">
           <h3>Управляйте своей оценкой благополучия<br className="desktop" /> через альтернативный скоринг</h3>
-          <Button fontSize={ctaButtonSize} paddingX={ctaButtonPaddingX} paddingY={ctaButtonPaddingY} radius={ctaButtonRadius}>Попробовать бесплатно</Button>
+          <Button onClick={onOpenRegistration} fontSize={ctaButtonSize} paddingX={ctaButtonPaddingX} paddingY={ctaButtonPaddingY} radius={ctaButtonRadius}>Попробовать бесплатно</Button>
         </div>
       </Section>
     </section>
@@ -184,7 +190,8 @@ FAQ.propTypes = {
   sectionTitleSize: PropTypes.number, sectionPaddingTop: PropTypes.number, sectionPaddingBottom: PropTypes.number, cardWidth: PropTypes.number, cardRadius: PropTypes.number,
   rowHeight: PropTypes.number, questionSize: PropTypes.number, answerSize: PropTypes.number, ctaWidth: PropTypes.number, ctaRadius: PropTypes.number,
   ctaPaddingX: PropTypes.number, ctaPaddingY: PropTypes.number, ctaTitleSize: PropTypes.number, ctaButtonSize: PropTypes.number,
-  ctaButtonPaddingX: PropTypes.number, ctaButtonPaddingY: PropTypes.number, ctaButtonRadius: PropTypes.number
+  ctaButtonPaddingX: PropTypes.number, ctaButtonPaddingY: PropTypes.number, ctaButtonRadius: PropTypes.number,
+  onOpenRegistration: PropTypes.func.isRequired
 };
 FAQ.defaultProps = { sectionTitleSize: 52, sectionPaddingTop: 58, sectionPaddingBottom: 65, cardWidth: 700, cardRadius: 17, rowHeight: 56, questionSize: 14, answerSize: 14, ctaWidth: 700, ctaRadius: 18, ctaPaddingX: 24, ctaPaddingY: 18, ctaTitleSize: 16, ctaButtonSize: 14, ctaButtonPaddingX: 20, ctaButtonPaddingY: 10, ctaButtonRadius: 8 };
 
@@ -196,8 +203,28 @@ Footer.defaultProps = { height: 76, paddingX: 16, fontSize: 11 };
 
 export default function App(props) {
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => (
+    localStorage.getItem('isAuthenticated') === 'true' || Boolean(localStorage.getItem('user'))
+  ));
+  const navigate = useNavigate();
   const openRegistration = () => setIsRegistrationOpen(true);
   const closeRegistration = () => setIsRegistrationOpen(false);
+  const handleLogin = (userData) => {
+    setIsAuthenticated(true);
+    localStorage.setItem('isAuthenticated', 'true');
+    setIsRegistrationOpen(false);
+    const registeredUser = { ...userData, registeredAt: new Date().toLocaleDateString() };
+    localStorage.setItem('user', JSON.stringify(registeredUser));
+    navigate('/survey', { state: { user: registeredUser } });
+  };
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('user');
+    localStorage.removeItem('rating');
+    localStorage.removeItem('surveyAnswers');
+    navigate('/');
+  };
 
   const config = { ...themeConfig, ...props };
 
@@ -211,7 +238,7 @@ export default function App(props) {
   } = config;
 
   // Всё остальное оставляем как есть, но используем sectionProps для дочерних компонентов
-  return (
+  const homePage = (
     <div style={{
       '--page-width': `${pageWidth}px`,
       '--page-side-padding': `${pageSidePadding}px`,
@@ -234,11 +261,21 @@ export default function App(props) {
       <main>
         <Hero {...sectionProps} onOpenRegistration={openRegistration} />
         <Features {...sectionProps} />
-        <FAQ {...sectionProps} />
+        <FAQ {...sectionProps} onOpenRegistration={openRegistration} />
       </main>
       <Footer {...sectionProps} />
-      <RegistrationModal isOpen={isRegistrationOpen} onClose={closeRegistration} />
+      <RegistrationModal isOpen={isRegistrationOpen} onClose={closeRegistration} onSuccess={handleLogin} />
     </div>
+  );
+
+  return (
+    <Routes>
+      <Route path="/survey" element={isAuthenticated ? <SurveyPage /> : <Navigate to="/" replace />} />
+      <Route path="/profile" element={isAuthenticated ? <AccountPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
+      <Route path="/rating" element={isAuthenticated ? <RatingPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
+      <Route path="/telegram-analysis" element={isAuthenticated ? <TelegramAnalysisPage /> : <Navigate to="/" replace />} />
+      <Route path="*" element={homePage} />
+    </Routes>
   );
 }
 
