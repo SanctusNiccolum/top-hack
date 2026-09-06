@@ -7,8 +7,8 @@
 ## Поток данных
 
 ```
-{user_id, texts} от бэкенда        result.json (Telegram Desktop)
-        │  backend_input.py                │  telegram_export.py
+{user_id, texts}                     result.json (Telegram Desktop)
+        │  input.py                        │  telegram_export.py
         ▼                                  ▼
         └──────────► AnalyzeRequest ◄──────┘        schemas.py
                           │
@@ -270,23 +270,3 @@ delta      = 25 × tanh(delta_raw / 20) × min(1, √(N_clean / 150))
 | принять новый формат от бэкенда | новый конвертер + ветка в `cli.load_any()` |
 
 ---
-
-## Тесты
-
-```bash
-pytest -q          # 103 теста
-```
-
-| Файл | Что проверяет |
-|---|---|
-| `test_cleaning` | PII, ссылки, техвывод, дедупликация, информативность |
-| `test_aggregator` | насыщение, диапазон, coverage, уровни риска, ручки строгости |
-| `test_validation` | все причины отсева |
-| `test_pipeline` | сквозные сценарии со сценарным провайдером |
-| `test_backend_input` | адаптер бэкенда, автоопределение формата, запись результата |
-| `test_telegram_export` | разбор выгрузки Telegram Desktop |
-| `test_adversarial` | инъекции и попытки накрутки |
-
-Провайдер объявлен как `Protocol`, поэтому тесты гоняют весь пайплайн без
-сети и без ключа, подставляя сценарную заглушку. Отдельного mock-режима
-**в продукте** нет намеренно: заглушка живёт только в тестах.
