@@ -1,10 +1,10 @@
 """ТЕСТОВЫЙ вспомогательный скрипт — не часть парсера и не для прода.
 
 Печатает список ваших диалогов (ЛС/группы/каналы) с их chat_id — чтобы
-было что подставить в JSON-вход парсера (поле chat_ids), не гадая на глаз.
-Тип чата теперь не нужен — main.py сам пробует оба метода на любой chat_id.
+было что подставить в JSON-вход парсера, не гадая на глаз.
 
 Запускать локально:
+
     pip install telethon
     python list_chats.py
 """
@@ -12,6 +12,18 @@ import asyncio
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
+from telethon.tl.types import Channel, Chat, User
+
+
+def guess_type(entity) -> str:
+    """Грубая подсказка, какой `type` поставить в JSON-входе парсера —
+    финальное решение всё равно за вами (см. README про own_messages/subscription).
+    """
+    if isinstance(entity, (User, Chat)):
+        return "own_messages"          # ЛС или обычная группа
+    if isinstance(entity, Channel):
+        return "own_messages" if entity.megagroup else "subscription"
+    return "unknown"
 
 
 async def main() -> None:
@@ -26,11 +38,12 @@ async def main() -> None:
         return
 
     try:
-        print(f"\n{'chat_id':>16}  {'username':<20}  title")
-        print("-" * 80)
+        print(f"\n{'chat_id':>16}  {'подсказка type':<14}  {'username':<20}  title")
+        print("-" * 90)
         async for dialog in client.iter_dialogs():
+            kind = guess_type(dialog.entity)
             username = getattr(dialog.entity, "username", None) or ""
-            print(f"{dialog.id:>16}  {username:<20}  {dialog.name}")
+            print(f"{dialog.id:>16}  {kind:<14}  {username:<20}  {dialog.name}")
     finally:
         await client.disconnect()
 

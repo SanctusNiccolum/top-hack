@@ -5,21 +5,18 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from telegram_parser.cleaning import clean_message_text
+from telegram_parser.cleaning import clean_message_text, MIN_WORDS
 
 
 class CleanMessageTextTests(unittest.TestCase):
 
-    def test_keeps_ordinary_message(self):
+    def test_keeps_ordinary_long_message(self):
         text = "Работаю над новым проектом для клиента, много задач"
         self.assertEqual(clean_message_text(text), text)
 
-    def test_keeps_short_messages_now(self):
-        # Продуктовое решение: короткие сообщения больше не отбрасываются,
-        # только PII вырезается — это отличает текущее поведение от более
-        # ранней версии функции.
-        self.assertEqual(clean_message_text("ок"), "ок")
-        self.assertEqual(clean_message_text("да норм"), "да норм")
+    def test_drops_short_message(self):
+        self.assertIsNone(clean_message_text("ок"))
+        self.assertIsNone(clean_message_text("да норм"))
 
     def test_drops_empty_or_none(self):
         self.assertIsNone(clean_message_text(None))
@@ -62,6 +59,12 @@ class CleanMessageTextTests(unittest.TestCase):
     def test_does_not_strip_short_numeric_ranges(self):
         out = clean_message_text("Было 5-6 встреч на прошлой неделе, все прошли нормально")
         self.assertIn("5-6", out)
+
+    def test_word_count_boundary(self):
+        exactly_min = " ".join(["слово"] * MIN_WORDS)
+        below_min = " ".join(["слово"] * (MIN_WORDS - 1))
+        self.assertIsNotNone(clean_message_text(exactly_min))
+        self.assertIsNone(clean_message_text(below_min))
 
 
 if __name__ == "__main__":

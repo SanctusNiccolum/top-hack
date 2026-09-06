@@ -1,36 +1,43 @@
 """Entry point for the Telegram parser subprocess.
 
 Invoked by the main `api` backend as a standalone OS process (not an
-imported function) — see the requirements brief for why: an authenticated
-Telegram session is sensitive enough to warrant its own process boundary.
+imported function) — an authenticated Telegram session is sensitive
+enough to warrant its own process boundary.
 
 Input contract: a single JSON payload on **stdin** (never argv/env/a temp
 file — those are visible to other processes on the machine or persist on
 disk; stdin isn't). Shape:
 
     {
-        "user_id": 123,
         "session_string": "...",
         "api_id": 12345,
         "api_hash": "...",
-        "chats": [
-            {"chat_id": -100111111111, "type": "own_messages"},
-            {"chat_id": -100222222222, "type": "subscription"}
-        ]
+        "chat_ids": [-100111111111, 5270187642, -100222222222]
     }
 
-`type` is one of "own_messages" (DMs, groups, the user's own channels —
-only their own messages are collected) or "subscription" (broadcast
-channels they just follow — only channel metadata is collected).
+Note there is no `user_id` in the input and no `type` per chat:
 
-The caller does NOT wait for this process to exit (fire-and-forget) —
-progress and errors are reported through `parse_state` in Postgres, one
-row per chat, not through stdout or the exit code. The exit code is only
-a coarse "something in this run failed" signal for basic process
-supervision/logging.
+- `user_id` is NOT taken from the caller — it's derived from the logged-in
+  account itself (`me.id`, the real numeric Telegram ID) right after
+  connecting. A caller-supplied placeholder ("1" for every test run, etc.)
+  is exactly the kind of thing that silently corrupts data once more than
+  one real account goes through this, so the parser determines it itself
+  from the one source that's actually guaranteed correct.
+- For every chat_id, the parser always attempts BOTH extractions —
+  own-messages (from_id == me) and subscription metadata
+  (title/username/about). Whichever produces something real is kept;
+  whichever doesn't apply to that entity (no "about" for a personal DM, no
+  own messages in a channel you only read) is simply empty. This avoids
+  the earlier misclassification problem where a private group the user
+  was technically a "subscriber" of, but actively posted in, came back
+  empty when forced through the wrong single extraction path.
 
-DB connection comes from the DATABASE_URL environment variable (ordinary
-service infra config, unlike the per-user session_string above).
+Output: writes directly to PostgreSQL (see db.py) — `messages`,
+`subscriptions`, `parse_state` (per-chat status/errors, and incremental
+last-parsed-at), and `ai_queue` (readiness signal for the AI service,
+plain table instead of a broker — see plan.md for why). The caller does
+NOT wait for this process to exit (fire-and-forget); `parse_state` and
+`ai_queue` are the whole "done" signal, not stdout/exit code.
 """
 from __future__ import annotations
 
@@ -46,9 +53,7 @@ from telethon.sessions import StringSession
 from . import db
 from .telegram_client import parse_own_messages, parse_subscription
 
-# ~3 months, per product decision. Deliberately a module-level constant so
-# it's a one-line change if the retention window is revisited later.
-LOOKBACK_DAYS = 90
+LOOKBACK_DAYS = 90  # ~3 месяца, продуктовое решение
 
 
 def _read_payload() -> dict:
@@ -56,68 +61,72 @@ def _read_payload() -> dict:
     return json.loads(raw)
 
 
-async def _do_parse(
-    client: TelegramClient,
-    pool,
-    user_id: int,
-    me_id: int,
-    chat_id: int,
-    chat_type: str,
-    since_date: datetime,
-) -> None:
-    entity = await client.get_entity(chat_id)
-    chat_name = getattr(entity, "title", None) or getattr(entity, "first_name", None)
-
-    if chat_type == "subscription":
-        data = await parse_subscription(client, chat_id)
-        await db.upsert_subscription(pool, user_id, chat_id, data)
-    else:
-        messages = await parse_own_messages(client, chat_id, since_date, me_id)
-        await db.upsert_messages(pool, user_id, chat_id, chat_name, chat_type, messages)
+async def _extract_messages(client, pool, user_id: int, chat_id: int, chat_name, me_id: int,
+                             since_date, errors: list[str]) -> None:
+    for attempt in (1, 2):  # один повтор после flood-wait
+        try:
+            messages = await parse_own_messages(client, chat_id, since_date, me_id)
+            await db.upsert_messages(pool, user_id, chat_id, chat_name, "chat", messages)
+            return
+        except FloodWaitError as e:
+            if attempt == 2:
+                errors.append(f"messages: flood wait persisted ({e.seconds}s)")
+                return
+            await asyncio.sleep(e.seconds)
+        except Exception as e:
+            errors.append(f"messages: {e}")
+            return
 
 
-async def _process_chat(client: TelegramClient, pool, user_id: int, me_id: int, chat: dict) -> None:
-    """Parse a single chat. Failures here are contained — they must not
-    stop the rest of the chats in this run from being processed.
-    """
-    chat_id = chat["chat_id"]
-    chat_type = chat["type"]
+async def _extract_subscription(client, pool, user_id: int, chat_id: int, errors: list[str]) -> None:
+    for attempt in (1, 2):
+        try:
+            sub = await parse_subscription(client, chat_id)
+            if sub.get("channel_name"):  # личный чат резолвится в channel_name=None — пропускаем
+                await db.upsert_subscription(pool, user_id, chat_id, sub)
+            return
+        except FloodWaitError as e:
+            if attempt == 2:
+                errors.append(f"subscription: flood wait persisted ({e.seconds}s)")
+                return
+            await asyncio.sleep(e.seconds)
+        except Exception as e:
+            errors.append(f"subscription: {e}")
+            return
+
+
+async def _process_chat(client, pool, user_id: int, me_id: int, chat_id: int) -> None:
+    errors: list[str] = []
+
+    try:
+        entity = await client.get_entity(chat_id)
+        chat_name = getattr(entity, "title", None) or getattr(entity, "first_name", None)
+    except Exception as e:
+        await db.update_parse_state(pool, user_id, chat_id, status="failed", error_message=f"entity: {e}")
+        return
 
     last_parsed_at = await db.get_last_parsed_at(pool, user_id, chat_id)
     floor_date = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
     since_date = max(last_parsed_at, floor_date) if last_parsed_at else floor_date
 
-    for attempt in (1, 2):  # one retry after riding out a flood-wait
-        try:
-            await _do_parse(client, pool, user_id, me_id, chat_id, chat_type, since_date)
-            await db.update_parse_state(
-                pool, user_id, chat_id, status="success",
-                last_parsed_at=datetime.now(timezone.utc),
-            )
-            return
-        except FloodWaitError as e:
-            if attempt == 2:
-                await db.update_parse_state(
-                    pool, user_id, chat_id, status="failed",
-                    error_message=f"flood wait persisted: {e.seconds}s",
-                )
-                return
-            await asyncio.sleep(e.seconds)
-        except Exception as e:
-            await db.update_parse_state(
-                pool, user_id, chat_id, status="failed", error_message=str(e),
-            )
-            return
+    await _extract_messages(client, pool, user_id, chat_id, chat_name, me_id, since_date, errors)
+    await _extract_subscription(client, pool, user_id, chat_id, errors)
+
+    if errors:
+        await db.update_parse_state(pool, user_id, chat_id, status="failed", error_message="; ".join(errors))
+    else:
+        await db.update_parse_state(
+            pool, user_id, chat_id, status="success", last_parsed_at=datetime.now(timezone.utc),
+        )
 
 
 async def main() -> int:
     payload = _read_payload()
 
-    user_id = payload["user_id"]
     session_string = payload["session_string"]
     api_id = payload["api_id"]
     api_hash = payload["api_hash"]
-    chats = payload["chats"]
+    chat_ids = payload["chat_ids"]
 
     pool = await db.get_pool()
     client = TelegramClient(StringSession(session_string), api_id, api_hash)
@@ -127,37 +136,33 @@ async def main() -> int:
         await client.connect()
 
         if not await client.is_user_authorized():
-            await db.enqueue_ai(
-                pool, user_id, status="failed",
-                error_message="Telegram session is not authorized",
-            )
-            return 1
+            return 1  # user_id ещё не известен (не залогинены) — писать в ai_queue некому
 
         me = await client.get_me()
+        user_id = me.id  # реальный Telegram ID, а не то, что передал вызывающий код
 
-        # StringSession, в отличие от файловой SQLite-сессии, не хранит
-        # кэш "уже виденных" сущностей — каждый новый процесс парсера
-        # стартует с пустым кэшем. get_entity() по голому числовому ID
-        # личного чата падает с "Could not find the input entity", пока
-        # Telethon не "встретит" эту сущность в рамках ТЕКУЩЕГО процесса —
-        # проще всего сделать это разом через get_dialogs() один раз в
-        # начале, а не для каждого чата отдельно.
-        # https://docs.telethon.dev/en/stable/concepts/entities.html
+        # StringSession несёт только ключ авторизации, не кэш "уже виденных"
+        # сущностей — каждый новый процесс парсера стартует с пустым кэшем.
+        # get_entity() по голому числовому ID падает, пока Telethon не
+        # "встретит" сущность в рамках ТЕКУЩЕГО процесса — get_dialogs()
+        # прогревает кэш разом для всех чатов аккаунта.
         await client.get_dialogs()
 
-        for chat in chats:
-            await _process_chat(client, pool, user_id, me.id, chat)
+        for chat_id in chat_ids:
+            await _process_chat(client, pool, user_id, me.id, chat_id)
 
         await db.enqueue_ai(pool, user_id, status="pending")
 
     except Exception as e:
         exit_code = 1
-        await db.enqueue_ai(pool, user_id, status="failed", error_message=str(e))
+        try:
+            await db.enqueue_ai(pool, user_id, status="failed", error_message=str(e))
+        except NameError:
+            pass  # упали раньше, чем узнали user_id — писать некуда
 
     finally:
-        # Session is one-time by design (per product decision): revoke it
-        # on Telegram's side too, so a leaked session_string can't be
-        # replayed after this run finishes. log_out() also disconnects.
+        # Сессия одноразовая по дизайну: отзываем её при ЛЮБОМ исходе, чтобы
+        # утёкший session_string нельзя было переиспользовать после запуска.
         try:
             await client.log_out()
         except Exception:

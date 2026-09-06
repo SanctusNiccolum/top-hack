@@ -26,6 +26,23 @@ from datetime import datetime, timezone
 
 from .cleaning import clean_message_text
 
+# Как классифицируем typeMi из экспорта в наши own_messages/subscription.
+# Каналы — подписка (метаданные), всё остальное — свои сообщения.
+_SUBSCRIPTION_TYPES = {"private_channel", "public_channel"}
+_OWN_MESSAGE_TYPES = {
+    "saved_messages", "replies", "personal_chat", "bot_chat",
+    "private_group", "private_supergroup", "public_supergroup",
+}
+
+
+def classify_chat_type(export_type: str) -> str:
+    """own_messages | subscription | unknown"""
+    if export_type in _SUBSCRIPTION_TYPES:
+        return "subscription"
+    if export_type in _OWN_MESSAGE_TYPES:
+        return "own_messages"
+    return "unknown"
+
 
 def extract_text(message: dict) -> str:
     """`text` в экспорте — либо строка, либо список (строки вперемешку с

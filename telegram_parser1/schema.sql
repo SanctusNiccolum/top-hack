@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS messages (
     chat_name    TEXT,
     chat_type    TEXT,
     datetime     TIMESTAMPTZ NOT NULL,
-    text         TEXT NOT NULL,                   -- уже PII-очищен (телефоны/юзернеймы/email)
+    text         TEXT NOT NULL,                   -- уже PII-очищен и прошёл фильтр длины
     is_forward   BOOLEAN NOT NULL DEFAULT FALSE,
     is_reply     BOOLEAN NOT NULL DEFAULT FALSE,
     UNIQUE (chat_id, tg_msg_id)                    -- защита от дублей при инкрементальном парсинге

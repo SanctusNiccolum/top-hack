@@ -1,8 +1,9 @@
-"""PII-scrubbing.
+"""PII-scrubbing and low-content message filtering.
 
-Applied to every collected message before it goes into the output JSON, so
-that raw phone numbers / emails / @-mentions of third parties never leave
-the machine, regardless of how short or long the message is.
+Applied to every collected message BEFORE it is written to Postgres, so that
+raw phone numbers / emails / @-mentions of third parties never reach the
+database, and low-content noise ("да", "ок", "хз", sticker-only messages)
+never inflates the dataset sent downstream to the AI service.
 """
 from __future__ import annotations
 
@@ -26,6 +27,11 @@ _PHONE_CANDIDATE_RE = re.compile(r"(?<!\w)(\+?\d[\d\-\s()]{6,}\d)(?!\w)")
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
+# Messages shorter than this (after cleaning) are dropped as noise.
+# Configurable — the exact cutoff (3 vs 4 words) was left as a tunable
+# assumption during requirements gathering.
+MIN_WORDS = 4
+
 
 def _looks_like_phone(candidate: str) -> bool:
     """Decide whether a digit-ish candidate span is actually a phone number.
@@ -48,12 +54,11 @@ def _looks_like_phone(candidate: str) -> bool:
 
 
 def clean_message_text(text: str | None) -> str | None:
-    """Scrub PII from a message's text.
+    """Scrub PII and filter out low-content messages.
 
-    Returns the cleaned text, or ``None`` only if there was no text at all
-    to begin with (e.g. a bare sticker with no caption). Unlike an earlier
-    version of this function, messages are no longer dropped for being
-    short — every actual message the user wrote is kept, just PII-scrubbed.
+    Returns the cleaned text, or ``None`` if the message should be dropped
+    entirely (empty, no text at all -- e.g. a bare sticker -- or too short
+    once cleaned).
     """
     if not text:
         return None
@@ -66,4 +71,10 @@ def clean_message_text(text: str | None) -> str | None:
     )
     cleaned = _WHITESPACE_RE.sub(" ", cleaned).strip()
 
-    return cleaned or None
+    if not cleaned:
+        return None
+
+    if len(cleaned.split(" ")) < MIN_WORDS:
+        return None
+
+    return cleaned

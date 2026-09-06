@@ -1,17 +1,11 @@
-"""Integration tests for the parser subprocess's orchestration logic
-(main.py), against fake telethon/asyncpg stand-ins under tests/_stubs.
-
-These do NOT touch a real Telegram account or a real Postgres instance —
-they exercise the parser's own control flow: per-chat error isolation,
-flood-wait retry, own-message filtering, subscription matching, and the
-final ai_queue signal. See README's "Известные ограничения MVP" — this
-closes that gap for the parts that can be tested without a live account;
-a real session_string is still needed before production use.
+"""Integration tests for telegram_parser.main — full orchestration flow
+against fake `telethon` and `asyncpg` (tests/_stubs), no real network or
+Postgres involved.
 """
-import sys
-import os
 import io
 import json
+import os
+import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -21,10 +15,10 @@ sys.path.insert(0, os.path.join(_HERE, ".."))
 
 os.environ.setdefault("DATABASE_URL", "postgresql://fake/fake")
 
-import telethon  # fake, from tests/_stubs
-import asyncpg   # fake, from tests/_stubs
+import asyncpg  # fake, from tests/_stubs  # noqa: E402
+import telethon  # fake, from tests/_stubs  # noqa: E402
 
-from telegram_parser import main as parser_main
+from telegram_parser import main as parser_main  # noqa: E402
 
 NOW = datetime.now(timezone.utc)
 
@@ -37,10 +31,9 @@ class ParserMainTests(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         asyncpg.reset_db()
-        telethon.SCENARIO.clear()
         telethon.SCENARIO.update({
             "authorized": True,
-            "me_id": 999,
+            "me_id": 5270187642,  # реальный тип ID, каким он бывает у настоящих аккаунтов
             "entities": {},
             "messages": {},
             "about": {},
@@ -50,146 +43,139 @@ class ParserMainTests(unittest.IsolatedAsyncioTestCase):
             "get_dialogs_calls": 0,
         })
 
-    async def _run(self, payload):
+    async def _run(self, chat_ids):
+        payload = {
+            "session_string": "s", "api_id": 1, "api_hash": "h",
+            "chat_ids": chat_ids,
+        }
         sys.stdin = io.StringIO(json.dumps(payload))
         return await parser_main.main()
 
-    async def test_own_messages_filtered_and_forward_flagged(self):
-        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, title="Мой чат")
+    async def test_user_id_comes_from_me_not_from_caller(self):
+        # Ключевой момент из запроса: user_id никогда не берётся из входных
+        # данных (там его вообще нет) — только из авторизованного me.id.
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
         telethon.SCENARIO["messages"][1001] = [
-            telethon.Msg(106, None, 999, "сообщение без даты (должно быть пропущено)"),
-            telethon.Msg(105, days_ago(1), 999, "Работаю над новым проектом для клиента"),
-            telethon.Msg(104, days_ago(2), 111, "чужое сообщение — не должно попасть в выборку"),
-            telethon.Msg(103, days_ago(3), 999, "ок"),  # too short, dropped
-            telethon.Msg(101, days_ago(5), 999, "Репост новости про биткоин заработок",
-                         forward=object()),
-            telethon.Msg(100, days_ago(95), 999, "слишком старое сообщение вне окна"),
+            telethon.Msg(1, days_ago(1), telethon.SCENARIO["me_id"], "тестовое сообщение"),
         ]
-        payload = {
-            "user_id": 42, "session_string": "s", "api_id": 1, "api_hash": "h",
-            "chats": [{"chat_id": 1001, "type": "own_messages"}],
-        }
-        code = await self._run(payload)
+        await self._run([1001])
+        msg = asyncpg.DB["messages"][0]
+        self.assertEqual(msg["user_id"], 5270187642)
+
+    async def test_short_messages_are_kept_no_min_words_filter(self):
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
+        telethon.SCENARIO["messages"][1001] = [
+            telethon.Msg(1, days_ago(1), telethon.SCENARIO["me_id"], "ок"),
+        ]
+        await self._run([1001])
+        self.assertEqual(len(asyncpg.DB["messages"]), 1)
+        self.assertEqual(asyncpg.DB["messages"][0]["text"], "ок")
+
+    async def test_personal_chat_own_messages_and_no_subscription(self):
+        me_id = telethon.SCENARIO["me_id"]
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
+        telethon.SCENARIO["messages"][1001] = [
+            telethon.Msg(10, days_ago(1), me_id, "у меня всё стабильно с работой сейчас"),
+            telethon.Msg(9, days_ago(1), 111, "чужое сообщение в этом же чате"),
+            telethon.Msg(8, days_ago(5), me_id, "три месяца назад были проблемы", forward=object()),
+        ]
+
+        code = await self._run([1001])
         self.assertEqual(code, 0)
 
-        stored = {m["tg_msg_id"]: m for m in asyncpg.DB["messages"]}
-        self.assertEqual(set(stored), {105, 101})
-        self.assertFalse(stored[105]["is_forward"])
-        self.assertTrue(stored[101]["is_forward"])
-        self.assertEqual(asyncpg.DB["parse_state"][(42, 1001)]["status"], "success")
+        ids = sorted(m["tg_msg_id"] for m in asyncpg.DB["messages"])
+        self.assertEqual(ids, [8, 10])  # чужое (9) отфильтровано
+        self.assertEqual(asyncpg.DB["subscriptions"], {})  # личный чат — не подписка
+        self.assertEqual(asyncpg.DB["parse_state"][(me_id, 1001)]["status"], "success")
 
-    async def test_subscription_matches_trusted_channel(self):
+    async def test_channel_subscription_matched_to_trusted(self):
+        me_id = telethon.SCENARIO["me_id"]
         telethon.SCENARIO["entities"][2001] = telethon.Entity(
-            2001, title="Финансовые сигналы", username="finance_signals")
-        telethon.SCENARIO["about"][2001] = "Инвестиции и трейдинг"
-        asyncpg.DB["trusted_channels"]["finance_signals"] = {
-            "trusted_channel_id": 55, "category": "finance"}
+            2001, title="Финансы", username="fin_channel_test"
+        )
+        telethon.SCENARIO["about"][2001] = "Про личные финансы"
+        telethon.SCENARIO["messages"][2001] = []
+        asyncpg.DB["trusted_channels"]["fin_channel_test"] = 777
 
-        payload = {
-            "user_id": 42, "session_string": "s", "api_id": 1, "api_hash": "h",
-            "chats": [{"chat_id": 2001, "type": "subscription"}],
-        }
-        await self._run(payload)
-
-        sub = asyncpg.DB["subscriptions"][(42, 2001)]
-        self.assertEqual(sub["trusted_channel_id"], 55)
-        self.assertEqual(sub["username"], "finance_signals")
-
-    async def test_subscription_without_username_has_no_trusted_match(self):
-        telethon.SCENARIO["entities"][2002] = telethon.Entity(
-            2002, title="Приватный канал", username=None)
-        telethon.SCENARIO["no_full_channel"][2002] = True  # GetFullChannelRequest fails
-
-        payload = {
-            "user_id": 42, "session_string": "s", "api_id": 1, "api_hash": "h",
-            "chats": [{"chat_id": 2002, "type": "subscription"}],
-        }
-        code = await self._run(payload)
-        self.assertEqual(code, 0)  # a failing GetFullChannelRequest must not fail the chat
-
-        sub = asyncpg.DB["subscriptions"][(42, 2002)]
-        self.assertIsNone(sub["trusted_channel_id"])
-        self.assertIsNone(sub["about"])
-
-    async def test_one_chat_failing_does_not_block_the_others(self):
-        telethon.SCENARIO["raise_on_entity"][1002] = RuntimeError("PEER_ID_INVALID")
-        telethon.SCENARIO["entities"][1003] = telethon.Entity(1003, title="OK-чат")
-        telethon.SCENARIO["messages"][1003] = [
-            telethon.Msg(1, days_ago(1), 999, "это сообщение должно дойти до базы данных"),
-        ]
-        payload = {
-            "user_id": 42, "session_string": "s", "api_id": 1, "api_hash": "h",
-            "chats": [
-                {"chat_id": 1002, "type": "own_messages"},
-                {"chat_id": 1003, "type": "own_messages"},
-            ],
-        }
-        code = await self._run(payload)
+        code = await self._run([2001])
         self.assertEqual(code, 0)
 
-        self.assertEqual(asyncpg.DB["parse_state"][(42, 1002)]["status"], "failed")
-        self.assertEqual(asyncpg.DB["parse_state"][(42, 1003)]["status"], "success")
-        self.assertEqual(len(asyncpg.DB["ai_queue"]), 1)
-        self.assertEqual(asyncpg.DB["ai_queue"][0]["status"], "pending")
+        sub = asyncpg.DB["subscriptions"][(me_id, 2001)]
+        self.assertEqual(sub["trusted_channel_id"], 777)
+        self.assertEqual(sub["username"], "fin_channel_test")
+
+    async def test_both_extractions_attempted_for_same_chat(self):
+        # Ключевой сценарий: приватная группа/канал, где юзер технически
+        # "подписчик", но реально пишет сам — обе выборки срабатывают сразу,
+        # без ручной классификации own_messages/subscription.
+        me_id = telethon.SCENARIO["me_id"]
+        telethon.SCENARIO["entities"][3001] = telethon.Entity(3001, title="Своя группа")
+        telethon.SCENARIO["messages"][3001] = [
+            telethon.Msg(1, days_ago(1), me_id, "пишу сюда сам, хотя это как бы подписка"),
+        ]
+        await self._run([3001])
+        self.assertEqual(len(asyncpg.DB["messages"]), 1)
+        self.assertIn((me_id, 3001), asyncpg.DB["subscriptions"])  # title есть -> подписка тоже пишется
+
+    async def test_entity_failure_does_not_block_other_chats(self):
+        me_id = telethon.SCENARIO["me_id"]
+        telethon.SCENARIO["raise_on_entity"][9999] = RuntimeError("CHAT_ID_INVALID")
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
+        telethon.SCENARIO["messages"][1001] = [
+            telethon.Msg(1, days_ago(1), me_id, "это сообщение должно нормально дойти"),
+        ]
+
+        code = await self._run([9999, 1001])
+        self.assertEqual(code, 0)
+        self.assertEqual(asyncpg.DB["parse_state"][(me_id, 9999)]["status"], "failed")
+        self.assertIn("entity", asyncpg.DB["parse_state"][(me_id, 9999)]["error_message"])
+        self.assertEqual(asyncpg.DB["parse_state"][(me_id, 1001)]["status"], "success")
+        self.assertEqual(len(asyncpg.DB["messages"]), 1)
 
     async def test_flood_wait_is_retried_once_and_succeeds(self):
-        telethon.SCENARIO["entities"][1003] = telethon.Entity(1003, title="Flood chat")
-        telethon.SCENARIO["messages"][1003] = [
-            telethon.Msg(1, days_ago(1), 999, "сообщение после успешного повтора запроса"),
+        me_id = telethon.SCENARIO["me_id"]
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
+        telethon.SCENARIO["messages"][1001] = [
+            telethon.Msg(1, days_ago(1), me_id, "сообщение после успешного повтора"),
         ]
-        telethon.SCENARIO["flood"][1003] = {"seconds": 0, "times": 1}
+        telethon.SCENARIO["flood"][1001] = {"seconds": 0, "times": 1}
 
-        payload = {
-            "user_id": 42, "session_string": "s", "api_id": 1, "api_hash": "h",
-            "chats": [{"chat_id": 1003, "type": "own_messages"}],
-        }
-        code = await self._run(payload)
-        self.assertEqual(code, 0)
-        self.assertEqual(asyncpg.DB["parse_state"][(42, 1003)]["status"], "success")
+        await self._run([1001])
+        self.assertEqual(asyncpg.DB["parse_state"][(me_id, 1001)]["status"], "success")
         self.assertEqual(len(asyncpg.DB["messages"]), 1)
 
     async def test_flood_wait_persisting_marks_chat_failed(self):
-        telethon.SCENARIO["entities"][1003] = telethon.Entity(1003, title="Flood chat")
-        telethon.SCENARIO["messages"][1003] = []
-        telethon.SCENARIO["flood"][1003] = {"seconds": 0, "times": 99}  # never recovers
+        me_id = telethon.SCENARIO["me_id"]
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
+        telethon.SCENARIO["messages"][1001] = []
+        telethon.SCENARIO["flood"][1001] = {"seconds": 0, "times": 99}
 
-        payload = {
-            "user_id": 42, "session_string": "s", "api_id": 1, "api_hash": "h",
-            "chats": [{"chat_id": 1003, "type": "own_messages"}],
-        }
-        await self._run(payload)
-        state = asyncpg.DB["parse_state"][(42, 1003)]
+        code = await self._run([1001])
+        self.assertEqual(code, 0)  # один упавший чат не валит весь процесс
+        state = asyncpg.DB["parse_state"][(me_id, 1001)]
         self.assertEqual(state["status"], "failed")
         self.assertIn("flood wait", state["error_message"])
 
-    async def test_get_dialogs_is_called_before_parsing(self):
-        # Regression test for the "Could not find the input entity" bug:
-        # StringSession carries no entity cache across processes, so
-        # main() must call get_dialogs() once to warm it up before trying
-        # to resolve any chat_id. If this assertion ever fails, real runs
-        # will break on personal chats/groups exactly like they did before
-        # this fix, even though every other test here still passes (the
-        # fake get_entity doesn't model the cache-miss behavior at all).
-        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, title="Мой чат")
-        telethon.SCENARIO["messages"][1001] = []
-        payload = {
-            "user_id": 42, "session_string": "s", "api_id": 1, "api_hash": "h",
-            "chats": [{"chat_id": 1001, "type": "own_messages"}],
-        }
-        await self._run(payload)
-        self.assertEqual(telethon.SCENARIO["get_dialogs_calls"], 1)
-
     async def test_unauthorized_session_short_circuits(self):
         telethon.SCENARIO["authorized"] = False
-        payload = {
-            "user_id": 42, "session_string": "bad", "api_id": 1, "api_hash": "h",
-            "chats": [{"chat_id": 1001, "type": "own_messages"}],
-        }
-        code = await self._run(payload)
+        code = await self._run([1001])
         self.assertEqual(code, 1)
         self.assertEqual(asyncpg.DB["messages"], [])
-        self.assertEqual(asyncpg.DB["parse_state"], {})
-        self.assertEqual(asyncpg.DB["ai_queue"][0]["status"], "failed")
+        self.assertEqual(asyncpg.DB["ai_queue"], [])
+
+    async def test_get_dialogs_is_called_before_parsing(self):
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
+        telethon.SCENARIO["messages"][1001] = []
+        await self._run([1001])
+        self.assertEqual(telethon.SCENARIO["get_dialogs_calls"], 1)
+
+    async def test_ai_queue_enqueued_on_success(self):
+        me_id = telethon.SCENARIO["me_id"]
+        telethon.SCENARIO["entities"][1001] = telethon.Entity(1001, first_name="Друг")
+        telethon.SCENARIO["messages"][1001] = []
+        await self._run([1001])
+        self.assertEqual(asyncpg.DB["ai_queue"][0]["user_id"], me_id)
+        self.assertEqual(asyncpg.DB["ai_queue"][0]["status"], "pending")
 
 
 if __name__ == "__main__":

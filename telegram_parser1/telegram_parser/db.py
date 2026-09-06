@@ -116,18 +116,6 @@ async def update_parse_state(
         )
 
 
-async def get_texts_for_user(pool: asyncpg.Pool, user_id: int) -> list[str]:
-    """Плоский список текстов сообщений пользователя — для экспорта в JSON
-    вида {"user_id": ..., "texts": [...]}, отдельно от хранения в БД.
-    """
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT text FROM messages WHERE user_id = $1 ORDER BY chat_id, tg_msg_id",
-            user_id,
-        )
-        return [r["text"] for r in rows]
-
-
 async def enqueue_ai(
     pool: asyncpg.Pool,
     user_id: int,

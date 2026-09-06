@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from telegram_parser.import_parser import (  # noqa: E402
+    classify_chat_type,
     extract_own_messages,
     extract_subscription_meta,
     extract_text,
@@ -21,6 +22,20 @@ OWNER_FROM_ID = f"user{OWNER_ID}"
 
 def days_ago(n):
     return NOW - timedelta(days=n)
+
+
+class ClassifyChatTypeTests(unittest.TestCase):
+    def test_channels_are_subscriptions(self):
+        self.assertEqual(classify_chat_type("private_channel"), "subscription")
+        self.assertEqual(classify_chat_type("public_channel"), "subscription")
+
+    def test_everything_else_known_is_own_messages(self):
+        for t in ("saved_messages", "replies", "personal_chat", "bot_chat",
+                  "private_group", "private_supergroup", "public_supergroup"):
+            self.assertEqual(classify_chat_type(t), "own_messages", t)
+
+    def test_unknown_type(self):
+        self.assertEqual(classify_chat_type("something_new_telegram_added"), "unknown")
 
 
 class ExtractTextTests(unittest.TestCase):
@@ -68,10 +83,12 @@ class ExtractOwnMessagesTests(unittest.TestCase):
         result = extract_own_messages(chat, OWNER_ID, days_ago(90))
         self.assertEqual([m["tg_msg_id"] for m in result], [1])
 
-    def test_pii_cleaning_is_applied(self):
+    def test_pii_cleaning_and_short_message_drop_are_applied(self):
         chat = self._chat([
             {"type": "message", "date_unixtime": str(int(days_ago(1).timestamp())),
-             "from_id": OWNER_FROM_ID, "id": 1,
+             "from_id": OWNER_FROM_ID, "id": 1, "text": "ок"},  # короткое -> отсеется
+            {"type": "message", "date_unixtime": str(int(days_ago(1).timestamp())),
+             "from_id": OWNER_FROM_ID, "id": 2,
              "text": "звони мне +7 921 555-12-34 если что-то срочное"},
         ])
         result = extract_own_messages(chat, OWNER_ID, days_ago(90))
