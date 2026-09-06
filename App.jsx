@@ -72,7 +72,6 @@ function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight
       <Section>
         <div className="hero-grid">
           <div className="hero-copy">
-            <p className="eyebrow">Бесплатно · Конфиденциально</p>
             <h1>Платформа управления<br className="desktop" /> своим рейтингом<br className="desktop" /> платежеспособности</h1>
             <p className="hero-lead">Пройдите короткий опрос —<br className="desktop" /> и за 5 минут узнайте, по плечу ли Вам кредит.</p>
             <div className="hero-actions">
