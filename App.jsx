@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import styled, { keyframes } from 'styled-components';
 import { onCLS, onINP, onLCP } from 'web-vitals';
 import { themeConfig } from './theme/config.js';
+import RegistrationModal from './components/RegistrationModal';
 
 
 const fadeUp = keyframes`
@@ -25,12 +26,12 @@ function Brand({ size, gap }) {
 Brand.propTypes = { size: PropTypes.number, gap: PropTypes.number };
 Brand.defaultProps = { size: 14, gap: 7 };
 
-function Header({ height, buttonSize, buttonRadius, buttonPaddingX, buttonPaddingY }) {
+function Header({ height, buttonSize, buttonRadius, buttonPaddingX, buttonPaddingY, onLogin }) {
   return (
     <header className="topbar" style={{ '--topbar-height': `${height}px` }}>
       <div className="topbar-inner">
         <Brand size={buttonSize} gap={7} />
-        <button className="login-mini" type="button" style={{ borderRadius: buttonRadius, padding: `${buttonPaddingY}px ${buttonPaddingX}px`, fontSize: `${buttonSize}px` }}>Вход</button>
+        <button className="login-mini" type="button" onClick={onLogin} style={{ borderRadius: buttonRadius, padding: `${buttonPaddingY}px ${buttonPaddingX}px`, fontSize: `${buttonSize}px` }}>Вход</button>
       </div>
     </header>
   );
@@ -40,15 +41,17 @@ Header.propTypes = {
   buttonSize: PropTypes.number,
   buttonRadius: PropTypes.number,
   buttonPaddingX: PropTypes.number,
-  buttonPaddingY: PropTypes.number
+  buttonPaddingY: PropTypes.number,
+  onLogin: PropTypes.func.isRequired
 };
 Header.defaultProps = { height: 56, buttonSize: 13, buttonRadius: 7, buttonPaddingX: 14, buttonPaddingY: 7 };
 
-function Button({ children, variant = 'orange', fontSize, paddingX, paddingY, radius, minWidth }) {
+function Button({ children, variant = 'orange', fontSize, paddingX, paddingY, radius, minWidth, onClick }) {
   return (
     <button
       className={`btn btn-${variant}`}
       type="button"
+      onClick={onClick}
       style={{ fontSize: `${fontSize}px`, padding: `${paddingY}px ${paddingX}px`, borderRadius: radius, minWidth: minWidth || undefined }}
     >
       {children}
@@ -62,21 +65,23 @@ Button.propTypes = {
   paddingX: PropTypes.number,
   paddingY: PropTypes.number,
   radius: PropTypes.number,
-  minWidth: PropTypes.number
+  minWidth: PropTypes.number,
+  onClick: PropTypes.func
 };
 Button.defaultProps = { variant: 'orange', fontSize: 14, paddingX: 20, paddingY: 10, radius: 8, minWidth: 0 };
 
-function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight, buttonFontSize, buttonPaddingX, buttonPaddingY, buttonRadius, buttonGap }) {
+function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight, buttonFontSize, buttonPaddingX, buttonPaddingY, buttonRadius, buttonGap, onOpenRegistration }) {
   return (
     <section className="hero" id="top" style={{ '--hero-top': `${topPadding}px`, '--hero-bottom': `${bottomPadding}px`, '--hero-title-size': `${heroTitleSize}px`, '--hero-lead-size': `${leadSize}px`, '--hero-art-height': `${artMinHeight}px`, '--hero-button-gap': `${buttonGap}px` }}>
       <Section>
         <div className="hero-grid">
           <div className="hero-copy">
+            <p className="eyebrow">Бесплатно · Конфиденциально</p>
             <h1>Платформа управления<br className="desktop" /> своим рейтингом<br className="desktop" /> платежеспособности</h1>
             <p className="hero-lead">Пройдите короткий опрос —<br className="desktop" /> и за 5 минут узнайте, по плечу ли Вам кредит.</p>
             <div className="hero-actions">
-              <Button fontSize={buttonFontSize} paddingX={buttonPaddingX} paddingY={buttonPaddingY} radius={buttonRadius}>Пройти опрос</Button>
-              <Button variant="yellow" fontSize={buttonFontSize} paddingX={buttonPaddingX} paddingY={buttonPaddingY} radius={buttonRadius}>Вход</Button>
+              <Button onClick={onOpenRegistration} fontSize={buttonFontSize} paddingX={buttonPaddingX} paddingY={buttonPaddingY} radius={buttonRadius}>Пройти опрос</Button>
+              <Button onClick={onOpenRegistration} variant="yellow" fontSize={buttonFontSize} paddingX={buttonPaddingX} paddingY={buttonPaddingY} radius={buttonRadius}>Вход</Button>
             </div>
             <p className="privacy">Бесплатно·Конфиденциально</p>
           </div>
@@ -94,7 +99,7 @@ function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight
 Hero.propTypes = {
   heroTitleSize: PropTypes.number, leadSize: PropTypes.number, topPadding: PropTypes.number, bottomPadding: PropTypes.number,
   artMinHeight: PropTypes.number, buttonFontSize: PropTypes.number, buttonPaddingX: PropTypes.number, buttonPaddingY: PropTypes.number,
-  buttonRadius: PropTypes.number, buttonGap: PropTypes.number
+  buttonRadius: PropTypes.number, buttonGap: PropTypes.number, onOpenRegistration: PropTypes.func.isRequired
 };
 Hero.defaultProps = { heroTitleSize: 71, leadSize: 20, topPadding: 55, bottomPadding: 28, artMinHeight: 320, buttonFontSize: 14, buttonPaddingX: 20, buttonPaddingY: 10, buttonRadius: 8, buttonGap: 10 };
 
@@ -181,7 +186,7 @@ FAQ.propTypes = {
   ctaPaddingX: PropTypes.number, ctaPaddingY: PropTypes.number, ctaTitleSize: PropTypes.number, ctaButtonSize: PropTypes.number,
   ctaButtonPaddingX: PropTypes.number, ctaButtonPaddingY: PropTypes.number, ctaButtonRadius: PropTypes.number
 };
-FAQ.defaultProps = { sectionTitleSize: 52, sectionPaddingTop: 58, sectionPaddingBottom: 65, cardWidth: 700, cardRadius: 17, rowHeight: 50, questionSize: 12, answerSize: 12, ctaWidth: 700, ctaRadius: 18, ctaPaddingX: 24, ctaPaddingY: 18, ctaTitleSize: 16, ctaButtonSize: 14, ctaButtonPaddingX: 20, ctaButtonPaddingY: 10, ctaButtonRadius: 8 };
+FAQ.defaultProps = { sectionTitleSize: 52, sectionPaddingTop: 58, sectionPaddingBottom: 65, cardWidth: 700, cardRadius: 17, rowHeight: 56, questionSize: 14, answerSize: 14, ctaWidth: 700, ctaRadius: 18, ctaPaddingX: 24, ctaPaddingY: 18, ctaTitleSize: 16, ctaButtonSize: 14, ctaButtonPaddingX: 20, ctaButtonPaddingY: 10, ctaButtonRadius: 8 };
 
 function Footer({ height, paddingX, fontSize }) {
   return <footer style={{ '--footer-height': `${height}px`, '--footer-pad': `${paddingX}px`, '--footer-font': `${fontSize}px` }}><div className="footer-inner"><Brand size={fontSize} gap={7} /><small>Политика в отношении обработки персональных данных<br />Согласие на обработку персональных данных</small><a href="#top" className="to-top">Наверх ↑</a></div></footer>;
@@ -190,7 +195,10 @@ Footer.propTypes = { height: PropTypes.number, paddingX: PropTypes.number, fontS
 Footer.defaultProps = { height: 76, paddingX: 16, fontSize: 11 };
 
 export default function App(props) {
-  // Объединяем конфиг с переданными пропсами (пропсы имеют приоритет)
+  const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
+  const openRegistration = () => setIsRegistrationOpen(true);
+  const closeRegistration = () => setIsRegistrationOpen(false);
+
   const config = { ...themeConfig, ...props };
 
   // Извлекаем все значения из config для удобства
@@ -222,13 +230,14 @@ export default function App(props) {
       '--body-font-size': `${bodyFontSize}px`,
       '--body-line-height': bodyLineHeight,
     }}>
-      <Header {...sectionProps} />
+      <Header {...sectionProps} onLogin={openRegistration} />
       <main>
-        <Hero {...sectionProps} />
+        <Hero {...sectionProps} onOpenRegistration={openRegistration} />
         <Features {...sectionProps} />
         <FAQ {...sectionProps} />
       </main>
       <Footer {...sectionProps} />
+      <RegistrationModal isOpen={isRegistrationOpen} onClose={closeRegistration} />
     </div>
   );
 }
