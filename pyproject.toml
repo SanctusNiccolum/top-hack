@@ -1,14 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "top-hack"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.13"
+name = "tg-scoring"
+version = "1.0.0"
+description = "Модуль альтернативного кредитного скоринга по Telegram-каналу"
+requires-python = ">=3.11"
 dependencies = [
-    "alembic>=1.19.1",
-    "dotenv>=0.9.9",
-    "fastapi>=0.141.1",
-    "psycopg2>=2.9.12",
-    "pwdlib>=0.3.1",
-    "sqlalchemy>=2.0.52",
+    "pydantic>=2.6,<3",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
 ]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+ner = ["natasha>=1.6"]
+vectors = ["sentence-transformers>=2.7"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+tg-scoring = "tg_scoring.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["tg_scoring*"]
