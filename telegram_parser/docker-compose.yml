@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: parser
+      POSTGRES_PASSWORD: parser
+      POSTGRES_DB: parser_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Схема накатывается автоматически при первом старте контейнера
+      # (Postgres-образ выполняет все *.sql из этой директории один раз,
+      # когда volume пустой).
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parser -d parser_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  parser:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://parser:parser@postgres:5432/parser_db
+    # Без -T при `docker compose run` Docker выделяет псевдо-TTY и ломает
+    # обычный pipe в stdin — это здесь не про постоянную работу контейнера,
+    # а про то, чтобы `docker compose run --rm -T parser < input.json`
+    # отработал корректно. См. README.
+    stdin_open: true
+
+volumes:
+  pgdata:
