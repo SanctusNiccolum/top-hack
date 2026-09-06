@@ -28,7 +28,7 @@ Brand.defaultProps = { size: 14, gap: 7 };
 
 function Header({ height, buttonSize, buttonRadius, buttonPaddingX, buttonPaddingY, onLogin }) {
   return (
-    <header className="topbar" style={{ '--topbar-height': `${height}px` }}>
+    <header className="topbar" id="top" style={{ '--topbar-height': `${height}px` }}>
       <div className="topbar-inner">
         <Brand size={buttonSize} gap={7} />
         <button className="login-mini" type="button" onClick={onLogin} style={{ borderRadius: buttonRadius, padding: `${buttonPaddingY}px ${buttonPaddingX}px`, fontSize: `${buttonSize}px` }}>Вход</button>
@@ -72,7 +72,7 @@ Button.defaultProps = { variant: 'orange', fontSize: 14, paddingX: 20, paddingY:
 
 function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight, buttonFontSize, buttonPaddingX, buttonPaddingY, buttonRadius, buttonGap, onOpenRegistration }) {
   return (
-    <section className="hero" id="top" style={{ '--hero-top': `${topPadding}px`, '--hero-bottom': `${bottomPadding}px`, '--hero-title-size': `${heroTitleSize}px`, '--hero-lead-size': `${leadSize}px`, '--hero-art-height': `${artMinHeight}px`, '--hero-button-gap': `${buttonGap}px` }}>
+    <section className="hero" style={{ '--hero-top': `${topPadding}px`, '--hero-bottom': `${bottomPadding}px`, '--hero-title-size': `${heroTitleSize}px`, '--hero-lead-size': `${leadSize}px`, '--hero-art-height': `${artMinHeight}px`, '--hero-button-gap': `${buttonGap}px` }}>
       <Section>
         <div className="hero-grid">
           <div className="hero-copy">
@@ -158,7 +158,7 @@ Features.defaultProps = { sectionTitleSize: 52, sectionPaddingTop: 58, sectionPa
 
 const faqs = [
   ['Что такое альтернативный скоринг?', 'Это оценка платежеспособности по дополнительным признакам, которые помогают дополнить классические финансовые показатели.'],
-  ['Что мне знать рейтинг платежеспособности?', 'Он показывает, насколько устойчиво Ваше финансовое положение и насколько комфортно Вам будет обслуживать кредит.'],
+  ['Зачем мне знать рейтинг платежеспособности?', 'Он показывает, насколько устойчиво Ваше финансовое положение и насколько комфортно Вам будет обслуживать кредит.'],
   ['Что будет анализироваться в Telegram?', 'Только те данные, которые пользователь разрешает использовать для выбранного сценария анализа.'],
   ['Плохой рейтинг, как улучшить?', 'Сначала разберите факторы с наибольшим влиянием: долговую нагрузку, стабильность дохода и другие доступные показатели.'],
   ['Через сколько появятся результаты оценки?', 'Основной результат можно показать сразу после завершения анкеты; дополнительные рекомендации появляются по мере обработки данных.']
