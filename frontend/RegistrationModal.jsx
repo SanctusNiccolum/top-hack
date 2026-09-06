@@ -153,6 +153,7 @@ const RegisterButton = styled.button`
 
 export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -188,6 +189,7 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
   const validate = () => {
     const nextErrors = {};
     if (!fullName.trim()) nextErrors.fullName = 'Введите ваше имя';
+    if (!phone.trim()) nextErrors.phone = 'Введите номер телефона';
     if (!email) nextErrors.email = 'Введите email';
     else if (!/\S+@\S+\.\S+/.test(email)) nextErrors.email = 'Некорректный email';
     if (!password) nextErrors.password = 'Введите пароль';
@@ -204,9 +206,10 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
       setErrors(nextErrors);
       return;
     }
-    onSuccess({ email, fullName: fullName.trim() });
+    onSuccess({ email, phone: phone.trim(), fullName: fullName.trim() });
     onClose();
     setFullName('');
+    setPhone('');
     setEmail('');
     setPassword('');
     setConfirmPassword('');
@@ -239,6 +242,8 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
         <form onSubmit={handleSubmit}>
           <Input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="ФИО" aria-label="ФИО" />
           {errors.fullName && <p className="form-error">{errors.fullName}</p>}
+          <Input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Номер телефона" aria-label="Номер телефона" />
+          {errors.phone && <p className="form-error">{errors.phone}</p>}
           <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Адрес электронной почты" aria-label="Адрес электронной почты" />
           {errors.email && <p className="form-error">{errors.email}</p>}
           <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Придумайте пароль" aria-label="Пароль" />
