@@ -1,0 +1,8 @@
+tests/
+dev_tools/
+.session_cache
+__pycache__/
+*.pyc
+.git/
+.pytest_cache/
+README.md
