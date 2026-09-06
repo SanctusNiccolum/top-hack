@@ -24,7 +24,7 @@ export const themeConfig = {
 
   // Шапка
   height: 56,
-  buttonSize: 13,
+  buttonSize: 16,
   buttonRadius: 7,
   buttonPaddingX: 14,
   buttonPaddingY: 7,
@@ -35,16 +35,16 @@ export const themeConfig = {
   leadSize: 20,
   topPadding: 55,
   bottomPadding: 28,
-  artMinHeight: 320,
+  artMinHeight: 290,
 
   // Кнопки
   buttonFontSize: 14,
   buttonGap: 10,
 
   // Секции
-  sectionPaddingTop: 58,
+  sectionPaddingTop: 76,
   sectionPaddingBottom: 65,
-  columnsGap: 34,
+  columnsGap: 44,
 
   // Информационные карточки
   noteWidth: 300,
@@ -58,17 +58,17 @@ export const themeConfig = {
   centerScale: 1,
 
   // FAQ
-  cardWidth: 700,
-  cardRadius: 17,
-  rowHeight: 50,
-  questionSize: 12,
-  answerSize: 12,
+  cardWidth: 750,
+  cardRadius: 23,
+  rowHeight: 84,
+  questionSize: 17,
+  answerSize: 15,
 
   // CTA
   ctaWidth: 700,
   ctaRadius: 18,
   ctaPaddingX: 24,
-  ctaPaddingY: 18,
+  ctaPaddingY: 19,
   ctaTitleSize: 16,
   ctaButtonSize: 14,
   ctaButtonPaddingX: 20,
@@ -79,10 +79,10 @@ export const themeConfig = {
   scoreCardWidth: 440,
   scoreCardPadding: 18,
   scoreCardRadius: 27,
-  scoreSize: 56,
-  scoreRowGap: 11,
-  pointsPaddingX: 10,
-  pointsPaddingY: 6,
-  recommendationSize: 12,
+  scoreSize: 60,
+  scoreRowGap: 17,
+  pointsPaddingX: 14,
+  pointsPaddingY: 9,
+  recommendationSize: 18,
   recommendationRadius: 7,
 };
