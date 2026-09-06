@@ -1,2 +1,0 @@
-telethon>=1.44.0
-asyncpg>=0.31.0
