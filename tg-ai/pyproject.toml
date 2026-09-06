@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tg-scoring"
+version = "1.0.0"
+description = "Модуль альтернативного кредитного скоринга по Telegram-каналу"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.6,<3",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+ner = ["natasha>=1.6"]
+vectors = ["sentence-transformers>=2.7"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+tg-scoring = "tg_scoring.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["tg_scoring*"]

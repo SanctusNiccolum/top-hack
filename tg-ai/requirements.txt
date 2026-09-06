@@ -1,0 +1,19 @@
+# --- ядро ---
+pydantic>=2.6,<3
+requests>=2.31
+python-dotenv>=1.0
+
+# --- HTTP-сервис ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+
+# --- тесты ---
+pytest>=8.0
+
+# --- опционально: NER для маскирования ФИО и адресов ---
+# включается флагом PII_USE_NER=true
+# natasha>=1.6
+
+# --- опционально: векторный пре-фильтр (v2, по умолчанию выключен) ---
+# включается флагом PREFILTER_USE_VECTORS=true
+# sentence-transformers>=2.7
