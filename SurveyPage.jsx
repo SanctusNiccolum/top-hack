@@ -73,7 +73,7 @@ const SurveyPage = () => {
         if (!answers.city.trim()) errors.push('Город');
         if (!answers.maritalStatus) errors.push('Семейное положение');
         if (!answers.isStudent) errors.push('Статус студента');
-        if (!answers.course) errors.push('Курс');
+        if (answers.isStudent.startsWith('Да') && !answers.course) errors.push('Курс');
         break;
       case 1:
         if (!answers.selfEmployed) errors.push('Самозанятость');
@@ -112,7 +112,7 @@ const SurveyPage = () => {
     }
   };
 
-  const { valid, errors } = isStepValid(currentStep);
+  const { valid } = isStepValid(currentStep);
 
   return (
     <div className="survey-page">
@@ -121,47 +121,16 @@ const SurveyPage = () => {
           <div className="survey-progress-value" style={{ width: `${progress}%` }} />
         </div>
         <div className="survey-card-content">
-          <div style={{ flex: 1 }}>{renderStep()}</div>
+            <div className="survey-questions">{renderStep()}</div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', flexShrink: 0 }}>
-          <button
-            onClick={goBack}
-            disabled={currentStep === 0}
-            style={{
-              padding: '0.6rem 1.5rem',
-              background: currentStep === 0 ? '#e9ecef' : '#fff',
-              border: '1px solid #ced4da',
-              borderRadius: '8px',
-              cursor: currentStep === 0 ? 'default' : 'pointer',
-              color: currentStep === 0 ? '#adb5bd' : '#212529',
-            }}
-          >
-            Назад
+          <div className="survey-navigation">
+          <button className="survey-back" onClick={goBack} disabled={currentStep === 0} aria-label="Назад">
+            ←
           </button>
-          <button
-            onClick={goNext}
-            disabled={!valid}
-            style={{
-              padding: '0.6rem 2rem',
-              background: valid ? '#ff8a00' : '#e9ecef',
-              border: 'none',
-              borderRadius: '8px',
-              color: valid ? '#fff' : '#adb5bd',
-              cursor: valid ? 'pointer' : 'default',
-              fontWeight: 'bold',
-            }}
-          >
+          <button className="survey-next" onClick={goNext} disabled={!valid}>
             {currentStep === totalSteps - 1 ? 'Завершить' : 'Далее ->'}
           </button>
         </div>
-        {!valid && (
-          <div style={{ color: '#dc3545', fontSize: '0.9rem', marginTop: '1.5rem' }}>
-            <p style={{ marginBottom: '0.3rem' }}>Пожалуйста, заполните:</p>
-            <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
-              {errors.map((error, index) => <li key={index}>{error}</li>)}
-            </ul>
-          </div>
-        )}
         </div>
       </div>
     </div>
@@ -172,7 +141,7 @@ const SurveyStepOne = ({ answers, onChange, onCheckboxChange }) => (
   <div>
     <div style={{ marginBottom: '1.5rem' }}>
       <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.3rem' }}>Сколько вам лет?</label>
-      <input type="text" value={answers.age} onChange={(event) => onChange('age', event.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #ced4da' }} placeholder="Например: 22" />
+      <input type="text" value={answers.age} onChange={(event) => onChange('age', event.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #ced4da' }} />
     </div>
     <div style={{ marginBottom: '1.5rem' }}>
       <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>Укажите ваше семейное положение.</label>
@@ -187,9 +156,9 @@ const SurveyStepOne = ({ answers, onChange, onCheckboxChange }) => (
 
 const SurveyStepTwo = ({ answers, onChange }) => (
   <div>
-    <div style={{ marginBottom: '1.5rem' }}><label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.3rem' }}>В каком городе вы проживаете?</label><input type="text" value={answers.city} onChange={(event) => onChange('city', event.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #ced4da' }} placeholder="Например: Москва" /></div>
-    <div style={{ marginBottom: '1.5rem' }}><label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>Являетесь ли вы студентом?</label>{['Да, очная форма', 'Да, очно-заочная/заочная форма', 'Нет'].map((option) => <label key={option} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.4rem' }}><input type="radio" name="survey-isStudent" checked={answers.isStudent === option} onChange={() => onChange('isStudent', option)} />{option}</label>)}</div>
-    <div><label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>На каком вы курсе?</label>{['1 курс', '2 курс', '3 курс', '4 курс', '5 курс', 'Магистратура/аспирантура'].map((option) => <label key={option} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.3rem' }}><input type="radio" name="survey-course" checked={answers.course === option} onChange={() => onChange('course', option)} />{option}</label>)}</div>
+    <div style={{ marginBottom: '1.5rem' }}><label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.3rem' }}>В каком городе вы проживаете?</label><input type="text" value={answers.city} onChange={(event) => onChange('city', event.target.value)} style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #ced4da' }} /></div>
+    <div style={{ marginBottom: '1.5rem' }}><label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>Являетесь ли вы студентом?</label>{['Да, очная форма', 'Да, очно-заочная/заочная форма', 'Нет'].map((option) => <label key={option} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.4rem' }}><input type="radio" name="survey-isStudent" checked={answers.isStudent === option} onChange={() => { onChange('isStudent', option); if (option === 'Нет') onChange('course', ''); }} />{option}</label>)}</div>
+    {answers.isStudent.startsWith('Да') && <div><label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.5rem' }}>На каком вы курсе?</label>{['1 курс', '2 курс', '3 курс', '4 курс', '5 курс', 'Магистратура/аспирантура'].map((option) => <label key={option} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.3rem' }}><input type="radio" name="survey-course" checked={answers.course === option} onChange={() => onChange('course', option)} />{option}</label>)}</div>}
   </div>
 );
 
@@ -211,7 +180,6 @@ const Step1 = ({ answers, onChange, onCheckboxChange }) => {
           value={answers.age}
           onChange={(e) => onChange('age', e.target.value)}
           style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #ced4da' }}
-          placeholder="Например: 22"
         />
       </div>
 
@@ -222,7 +190,6 @@ const Step1 = ({ answers, onChange, onCheckboxChange }) => {
           value={answers.city}
           onChange={(e) => onChange('city', e.target.value)}
           style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid #ced4da' }}
-          placeholder="Например: Москва"
         />
       </div>
 
