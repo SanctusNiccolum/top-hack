@@ -1,0 +1,142 @@
+import React from 'react';
+import App from './App';
+
+const number = (description, min, max, step = 1) => ({ control: { type: 'range', min, max, step }, description });
+
+const argTypes = {
+  pageWidth: number('Максимальная ширина всего сайта', 700, 1800),
+  pageSidePadding: number('Боковой отступ страницы', 0, 60),
+  primaryColor: { control: 'color', description: 'Основной тёмно-зелёный цвет текста' },
+  mintColor: { control: 'color', description: 'Основной mint/emerald цвет' },
+  orangeColor: { control: 'color', description: 'Оранжевый цвет CTA' },
+  yellowColor: { control: 'color', description: 'Жёлтый цвет вторичной кнопки' },
+  pinkColor: { control: 'color', description: 'Розовый цвет градиента шапки' },
+  creamColor: { control: 'color', description: 'Цвет фона страницы' },
+  blackColor: { control: 'color', description: 'Цвет футера' },
+  bodyFontSize: number('Базовый размер текста страницы', 10, 22),
+  bodyLineHeight: number('Базовая высота строки', 1, 2, 0.05),
+  lightMintColor: { control: 'color', description: 'Светлый mint для информационных карточек' },
+  scoreBgColor: { control: 'color', description: 'Фон центральной карточки рейтинга' },
+  pointsBgColor: { control: 'color', description: 'Фон бейджей с баллами' },
+  recommendationBgColor: { control: 'color', description: 'Фон кнопки рекомендаций' },
+  ctaEndColor: { control: 'color', description: 'Конечный цвет градиента CTA' },
+
+
+  height: number('Высота верхней полосы', 35, 100),
+  buttonSize: number('Размер текста кнопки «Вход» в шапке', 8, 24),
+  buttonRadius: number('Скругление кнопок в шапке', 0, 30),
+  buttonPaddingX: number('Горизонтальный padding кнопки в шапке', 4, 40),
+  buttonPaddingY: number('Вертикальный padding кнопки в шапке', 2, 25),
+  heroTitleSize: number('Размер главного заголовка Hero', 28, 90),
+  sectionTitleSize: number('Размер заголовков секций', 28, 90),
+  leadSize: number('Размер текста под главным заголовком', 12, 32),
+  topPadding: number('Отступ сверху Hero', 10, 120),
+  bottomPadding: number('Отступ снизу Hero', 0, 100),
+  artMinHeight: number('Высота декоративной иллюстрации', 180, 500),
+  buttonFontSize: number('Размер текста основных кнопок', 10, 24),
+  buttonGap: number('Расстояние между основными кнопками', 0, 40),
+  sectionPaddingTop: number('Отступ сверху секций', 15, 120),
+  sectionPaddingBottom: number('Отступ снизу секций', 15, 140),
+  columnsGap: number('Расстояние между колонками возможностей', 5, 100),
+  noteWidth: number('Ширина информационных карточек', 150, 500),
+  notePadding: number('Внутренний отступ информационных карточек', 5, 40),
+  noteRadius: number('Скругление информационных карточек', 0, 35),
+  noteFontSize: number('Размер текста информационных карточек', 8, 20),
+  noteTitleSize: number('Размер заголовка информационных карточек', 10, 28),
+  centerWidth: number('Ширина центральной зоны', 280, 650),
+  centerScale: number('Масштаб центрального блока', 0.6, 1.5, 0.05),
+  cardWidth: number('Ширина блока FAQ', 350, 1000),
+  cardRadius: number('Скругление блока FAQ', 0, 40),
+  rowHeight: number('Высота строки FAQ', 35, 90),
+  questionSize: number('Размер вопросов FAQ', 8, 22),
+  answerSize: number('Размер ответов FAQ', 8, 22),
+  ctaWidth: number('Ширина CTA-блока', 350, 1000),
+  ctaRadius: number('Скругление CTA-блока', 0, 40),
+  ctaPaddingX: number('Горизонтальный padding CTA', 5, 50),
+  ctaPaddingY: number('Вертикальный padding CTA', 5, 50),
+  ctaTitleSize: number('Размер текста CTA', 10, 28),
+  ctaButtonSize: number('Размер текста CTA-кнопки', 10, 24),
+  ctaButtonPaddingX: number('Горизонтальный padding CTA-кнопки', 4, 45),
+  ctaButtonPaddingY: number('Вертикальный padding CTA-кнопки', 2, 25),
+  ctaButtonRadius: number('Скругление CTA-кнопки', 0, 30),
+  scoreCardWidth: number('Ширина карточки анализа', 280, 650),
+  scoreCardPadding: number('Внутренний отступ карточки анализа', 5, 40),
+  scoreCardRadius: number('Скругление карточки анализа', 0, 45),
+  scoreSize: number('Размер числа 82/100', 30, 90),
+  scoreRowGap: number('Расстояние между строками анализа', 3, 30),
+  pointsPaddingX: number('Горизонтальный padding бейджей баллов', 2, 25),
+  pointsPaddingY: number('Вертикальный padding бейджей баллов', 2, 20),
+  recommendationSize: number('Размер текста рекомендации', 8, 20),
+  recommendationRadius: number('Скругление рекомендации', 0, 30)
+};
+
+const meta = {
+  title: 'Pages/Payment Score Landing',
+  component: App,
+  parameters: {
+    layout: 'fullscreen',
+    controls: { expanded: true }
+  },
+  argTypes
+};
+export default meta;
+
+export const FullPage = {
+  name: 'Вся страница — редактируй всё через Controls',
+  args: { ...App.defaultProps }
+};
+
+export const CompactButtons = {
+  name:'Пример — компактные кнопки',
+  args:{
+    ...App.defaultProps,
+    buttonFontSize:15,
+    buttonPaddingX:16,
+    buttonPaddingY:11,
+    buttonRadius:10,
+    ctaButtonSize:14,
+    pageWidth:1141,
+    pageSidePadding:15,
+    pinkColor:"#ff0a70",
+    bodyLineHeight:1.5,
+    height:66,
+    buttonSize:16,
+    sectionTitleSize:45,
+    leadSize:23,
+    bottomPadding:44,
+    artMinHeight:280,
+    buttonGap:11,
+    columnsGap:50,
+    noteWidth:342,
+    notePadding:18,
+    noteRadius:15,
+    noteFontSize:18,
+    noteTitleSize:18,
+    centerWidth:475,
+    centerScale:1.1,
+    cardWidth:757,
+    cardRadius:23,
+    rowHeight:71,
+    questionSize:17,
+    answerSize:14,
+    ctaButtonPaddingY:13,
+    ctaButtonRadius:11,
+    scoreCardWidth:476,
+    scoreCardPadding:27,
+    scoreCardRadius:31,
+    scoreSize:59,
+    scoreRowGap:10,
+    pointsPaddingX:15,
+    pointsPaddingY:16,
+    recommendationSize:16,
+    recommendationRadius:10,
+    bodyFontSize:16,
+    heroTitleSize:69,
+    topPadding:50,
+    sectionPaddingTop:71,
+    sectionPaddingBottom:58,
+    ctaWidth:668,
+    ctaTitleSize:18,
+    ctaButtonPaddingX:30
+  }
+};

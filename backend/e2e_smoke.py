@@ -88,6 +88,10 @@ survey_only = data
 print(f"     score={data.get('score')} survey={data.get('survey_score')} "
       f"statement={data.get('statement_score')}")
 
+st, data = call("POST", "/consent", {"consent_type": "bank_statement",
+                                     "document_version": "v1"})
+ok &= step("согласие на обработку выписки", st, data, expect=201)
+
 st, data = call("POST", "/statement/upload", files=PDF)
 ok &= step("загрузка PDF-выписки", st, data)
 statement_score = data.get("statement_score")
@@ -97,7 +101,7 @@ st, data = call("POST", "/report", {"monthly_payments": 9800,
                                     "npd_certificate_attached": False})
 ok &= step("отчёт ПОСЛЕ выписки (склейка двух веток)", st, data)
 print(f"     score={data.get('score')} survey={data.get('survey_score')} "
-      f"statement={data.get('statement_score')} telegram={data.get('telegram_score')}")
+      f"statement={data.get('statement_score')} telegram_delta={data.get('telegram_delta')}")
 print(f"     комментарий сохранён: {bool(data.get('comment_from_ai'))}")
 
 # Проверяем саму арифметику склейки: веса 0.4/0.4, telegram отсутствует,

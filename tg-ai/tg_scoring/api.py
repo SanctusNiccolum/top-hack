@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
+from .backend_input import from_backend_payload
 from .config import get_settings
 from .llm import GigaChatProvider, LLMError
 from .pipeline import analyze
@@ -45,6 +46,23 @@ def health() -> dict[str, object]:
         "model": settings.gigachat_model,
         "gigachat_key_configured": bool(settings.gigachat_auth_key),
     }
+
+
+@app.post("/analyze/backend", response_model=AnalyzeResponse)
+def analyze_backend_endpoint(payload: dict) -> AnalyzeResponse:
+    """Плоский формат бэкенда {user_id, texts} — тот же, что отдаёт
+    telegram_parser. Конвертация лежит в backend_input.py, чтобы правила
+    разбора payload не расползались по двум сервисам.
+    """
+    try:
+        request, warnings = from_backend_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    for warning in warnings:
+        logging.getLogger(__name__).warning("backend payload: %s", warning)
+
+    return analyze_endpoint(request)
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)

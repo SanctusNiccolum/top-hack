@@ -67,3 +67,13 @@ class TelegramStatusResponse(BaseModel):
     chats: list[TelegramChatStatus]
     messages_collected: int
     subscriptions_collected: int
+
+
+class TelegramScoreResponse(BaseModel):
+    # "ok" | "error" | "insufficient_data" — как их отдаёт модуль tg-ai
+    status: str
+    # Поправка к скору −25..+25 (не балл!)
+    score_delta: float
+    risk_level: str
+    explanation_ru: str
+    messages_analyzed: int

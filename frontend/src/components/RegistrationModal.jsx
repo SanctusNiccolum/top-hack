@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { login, register } from '../api';
 import PropTypes from 'prop-types';
 import styled from 'styled-components';
+import { login, register } from '../api';
 
 const Overlay = styled.div`
   position: fixed;
@@ -152,7 +152,8 @@ const RegisterButton = styled.button`
   }
 `;
 
-export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
+export default function RegistrationModal({ isOpen, mode, onClose, onSuccess }) {
+  const isLogin = mode === 'login';
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -160,6 +161,7 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agree, setAgree] = useState(false);
   const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -189,15 +191,23 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
 
   const validate = () => {
     const nextErrors = {};
-    if (!fullName.trim()) nextErrors.fullName = 'Введите ваше имя';
+
+    // Логин на бэкенде идёт по НОМЕРУ ТЕЛЕФОНА (см. LoginRequest), поэтому
+    // телефон обязателен в обоих режимах, а email — только при регистрации,
+    // он хранится в профиле и в аутентификации не участвует.
     if (!phone.trim()) nextErrors.phone = 'Введите номер телефона';
-    if (!email) nextErrors.email = 'Введите email';
-    else if (!/\S+@\S+\.\S+/.test(email)) nextErrors.email = 'Некорректный email';
+
     if (!password) nextErrors.password = 'Введите пароль';
-    // 8 символов — требование бэкенда (RegisterRequest), с 6 он ответит 422.
+    // 8 символов — требование бэкенда, с 6 он ответит ошибкой валидации.
     else if (password.length < 8) nextErrors.password = 'Пароль должен быть не менее 8 символов';
-    if (password !== confirmPassword) nextErrors.confirmPassword = 'Пароли не совпадают';
-    if (!agree) nextErrors.agree = 'Необходимо согласие на обработку данных';
+
+    if (!isLogin) {
+      if (!fullName.trim()) nextErrors.fullName = 'Введите ваше имя';
+      if (!email) nextErrors.email = 'Введите email';
+      else if (!/\S+@\S+\.\S+/.test(email)) nextErrors.email = 'Некорректный email';
+      if (password !== confirmPassword) nextErrors.confirmPassword = 'Пароли не совпадают';
+      if (!agree) nextErrors.agree = 'Необходимо согласие на обработку данных';
+    }
     return nextErrors;
   };
 
@@ -209,26 +219,39 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
       return;
     }
 
-    // Регистрируем пользователя на бэкенде и сохраняем токен: без него
-    // все последующие запросы (анкета, выписка, Telegram) вернут 401.
+    setBusy(true);
+    setErrors({});
+
+    // Раньше вход сверялся с localStorage — то есть был бутафорским.
+    // Теперь это реальные запросы; обе функции сами сохраняют токен.
+    let data;
     try {
-      await register(phone.trim(), password);
+      data = isLogin
+        ? await login(phone.trim(), password)
+        : await register(phone.trim(), password);
     } catch (err) {
-      if (err.status === 409) {
-        // Такой номер уже зарегистрирован — пробуем войти тем же паролем.
+      // При регистрации на занятый номер пробуем войти тем же паролем —
+      // иначе повторный клик по «Зарегистрироваться» уводит в тупик.
+      if (!isLogin && err.status === 409) {
         try {
-          await login(phone.trim(), password);
+          data = await login(phone.trim(), password);
         } catch (loginErr) {
-          setErrors({ phone: loginErr.message });
+          setErrors({ form: loginErr.message });
+          setBusy(false);
           return;
         }
       } else {
-        setErrors({ phone: err.message });
+        setErrors({ form: err.message });
+        setBusy(false);
         return;
       }
     }
+    setBusy(false);
 
-    onSuccess({ email, phone: phone.trim(), fullName: fullName.trim() });
+    onSuccess(
+      { email: email.trim(), phone: phone.trim(), fullName: fullName.trim(), mode },
+      { isEnded: data.is_ended }
+    );
     onClose();
     setFullName('');
     setPhone('');
@@ -247,36 +270,43 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
       <Modal
         role="dialog"
         aria-modal="true"
-        aria-labelledby="registration-title"
+        aria-labelledby="auth-modal-title"
       >
         <CloseButton
           type="button"
-          aria-label="Закрыть окно регистрации"
+          aria-label={`Закрыть окно ${isLogin ? 'входа' : 'регистрации'}`}
           onClick={onClose}
         >
           ×
         </CloseButton>
 
-        <Title id="registration-title">
-          Регистрация
+        <Title id="auth-modal-title">
+          {isLogin ? 'Вход' : 'Регистрация'}
         </Title>
 
         <form onSubmit={handleSubmit}>
-          <Input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="ФИО" aria-label="ФИО" />
-          {errors.fullName && <p className="form-error">{errors.fullName}</p>}
-          <Input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Номер телефона" aria-label="Номер телефона" />
+          {!isLogin && <>
+            <Input type="text" value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="ФИО" aria-label="ФИО" />
+            {errors.fullName && <p className="form-error">{errors.fullName}</p>}
+          </>}
+          <Input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Номер телефона" aria-label="Номер телефона" autoComplete="tel" />
           {errors.phone && <p className="form-error">{errors.phone}</p>}
-          <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Адрес электронной почты" aria-label="Адрес электронной почты" />
-          {errors.email && <p className="form-error">{errors.email}</p>}
-          <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Придумайте пароль" aria-label="Пароль" />
+          {!isLogin && <>
+            <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Адрес электронной почты" aria-label="Адрес электронной почты" />
+            {errors.email && <p className="form-error">{errors.email}</p>}
+          </>}
+          <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isLogin ? 'Пароль' : 'Придумайте пароль'} aria-label="Пароль" />
           {errors.password && <p className="form-error">{errors.password}</p>}
-          <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Подтвердите пароль" aria-label="Подтвердите пароль" />
-          {errors.confirmPassword && <p className="form-error">{errors.confirmPassword}</p>}
-          <Consent>
-            <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
-            <span>Я согласен на обработку персональных данных и с условиями политики.</span>
-          </Consent>
-          {errors.agree && <p className="form-error">{errors.agree}</p>}
+          {!isLogin && <>
+            <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Подтвердите пароль" aria-label="Подтвердите пароль" />
+            {errors.confirmPassword && <p className="form-error">{errors.confirmPassword}</p>}
+            <Consent>
+              <input type="checkbox" checked={agree} onChange={(event) => setAgree(event.target.checked)} />
+              <span>Я согласен на обработку персональных данных и с условиями политики.</span>
+            </Consent>
+            {errors.agree && <p className="form-error">{errors.agree}</p>}
+          </>}
+          {errors.form && <p className="form-error">{errors.form}</p>}
 
           <SocialTitle>или войдите с помощью:</SocialTitle>
 
@@ -296,7 +326,9 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
           </SocialButton>
           </Socials>
 
-          <RegisterButton type="submit">Зарегистрироваться</RegisterButton>
+          <RegisterButton type="submit" disabled={busy}>
+            {busy ? 'Отправляем…' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+          </RegisterButton>
         </form>
       </Modal>
     </Overlay>
@@ -305,6 +337,11 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }) {
 
 RegistrationModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
+  mode: PropTypes.oneOf(['registration', 'login']),
   onClose: PropTypes.func.isRequired,
   onSuccess: PropTypes.func.isRequired,
+};
+
+RegistrationModal.defaultProps = {
+  mode: 'registration',
 };

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { uploadStatement } from '../api';
+import { grantConsent, uploadStatement } from '../api';
 
 /**
  * Загрузка банковской выписки (PDF за 3 месяца) — основной сценарий кейса.
@@ -16,6 +16,7 @@ const StatementUploadPage = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [consentGiven, setConsentGiven] = useState(false);
 
   const handleFile = (event) => {
     setFile(event.target.files?.[0] || null);
@@ -30,6 +31,9 @@ const StatementUploadPage = () => {
     setBusy(true);
     setError('');
     try {
+      // Бэкенд не примет выписку без записи согласия — фиксируем его в
+      // момент, когда пользователь осознанно жмёт «Проанализировать».
+      await grantConsent('bank_statement', 'v1');
       setResult(await uploadStatement(file));
     } catch (err) {
       setError(err.message);
@@ -54,7 +58,18 @@ const StatementUploadPage = () => {
             onChange={handleFile}
             aria-label="PDF-файл выписки"
           />
-          <button type="submit" disabled={busy || !file}>
+          <label className="consent-check">
+            <input
+              type="checkbox"
+              checked={consentGiven}
+              onChange={(event) => setConsentGiven(event.target.checked)}
+            />
+            <span>
+              Я согласен на обработку данных банковской выписки для оценки
+              платёжеспособности.
+            </span>
+          </label>
+          <button type="submit" disabled={busy || !file || !consentGiven}>
             {busy ? 'Анализируем…' : 'Проанализировать'}
           </button>
         </form>

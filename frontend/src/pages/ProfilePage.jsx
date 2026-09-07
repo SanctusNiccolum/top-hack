@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { createReport } from '../api';
+import { buildRecommendations } from '../utils/recommendations';
 
 const ProfilePage = () => {
   const location = useLocation();
@@ -44,10 +45,17 @@ const ProfilePage = () => {
   }
 
   const survey = answers || {};
-  const recommendations = (report.comment_from_ai || '')
-    .split('\n')
-    .filter((line) => line.trim())
-    .map((line) => ({ title: '', text: line }));
+
+  // Рекомендации строятся из посчитанных факторов Telegram и разбора по
+  // выписке — см. utils/recommendations.js.
+  const recommendations = buildRecommendations(report);
+
+  // Разбивка по веткам: раньше здесь был объект details от клиентского
+  // расчёта, которого больше нет.
+  const branches = [
+    ['Анкета', report.survey_score],
+    ['Банковская выписка', report.statement_score]
+  ];
 
   const scorePercent = Math.max(0, Math.min(Number(report.score) || 0, 100));
   const nameParts = (user.fullName || 'Иван').trim().split(/\s+/).filter(Boolean);
@@ -77,9 +85,21 @@ const ProfilePage = () => {
 
           <section className="profile-factors">
             <h2>Факторы оценки</h2>
-            {Object.entries(details).map(([key, value]) => (
-              <div className="profile-factor" key={key}><span>{key}</span><strong>{value}</strong></div>
+            {branches.map(([label, value]) => (
+              <div className="profile-factor" key={label}>
+                <span>{label}</span>
+                <strong>{value === null ? 'не заполнено' : `${Number(value).toFixed(1)}/100`}</strong>
+              </div>
             ))}
+            {report.telegram_delta !== null && report.telegram_delta !== undefined && (
+              <div className="profile-factor">
+                <span>Поправка по Telegram</span>
+                <strong>
+                  {Number(report.telegram_delta) > 0 ? '+' : ''}
+                  {Number(report.telegram_delta).toFixed(1)}
+                </strong>
+              </div>
+            )}
           </section>
         </main>
 

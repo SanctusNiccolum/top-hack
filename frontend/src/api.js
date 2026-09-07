@@ -107,7 +107,8 @@ export function completeAccount() {
 
 /**
  * Считает скор. Возвращает итог и разбивку по веткам:
- * survey_score / statement_score / telegram_score (null = ветка не считалась).
+ * survey_score / statement_score (0..100, null = ветка не считалась) и
+ * telegram_delta — поправка −25..+25, она прибавляется к их среднему.
  */
 export function createReport({ monthlyPayments = 0, npdCertificateAttached = false } = {}) {
   return request('/report', {
@@ -212,4 +213,16 @@ export function telegramAnalyze(sessionString, chatIds) {
  */
 export function telegramStatus() {
   return request('/telegram/status');
+}
+
+/**
+ * Прогоняет уже собранные сообщения через ИИ (GigaChat) и записывает
+ * поправку к скору. Вызывать ПОСЛЕ того, как telegramStatus() вернул
+ * 'done' — до этого анализировать нечего.
+ *
+ * Возвращает { status, score_delta (−25..+25), risk_level,
+ * explanation_ru, messages_analyzed }.
+ */
+export function telegramScore() {
+  return request('/telegram/score', { method: 'POST' });
 }

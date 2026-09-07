@@ -24,4 +24,10 @@ class ReportResponse(BaseModel):
     # чтобы показать, из чего сложился итог.
     survey_score: Decimal | None = None
     statement_score: Decimal | None = None
-    telegram_score: Decimal | None = None
+    # Telegram — поправка −25..+25, а не балл: она прибавляется к
+    # среднему двух веток выше.
+    telegram_delta: Decimal | None = None
+    telegram_risk: str | None = None
+    telegram_comment: str | None = None
+    # [{category, contribution, evidence_count}] — из чего сложилась поправка
+    telegram_factors: list | None = None

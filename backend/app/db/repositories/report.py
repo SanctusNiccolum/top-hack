@@ -35,7 +35,10 @@ class ReportRepository:
         date: datetime,
         survey_score: Decimal | None = None,
         statement_score: Decimal | None = None,
-        telegram_score: Decimal | None = None,
+        telegram_delta: Decimal | None = None,
+        telegram_risk: str | None = None,
+        telegram_comment: str | None = None,
+        telegram_factors: list | None = None,
         comment_from_ai: str | None = None,
     ) -> ReportModel:
         """Обновляет ТОЛЬКО переданные ветки, остальные оставляет как есть.
@@ -60,8 +63,17 @@ class ReportRepository:
         if statement_score is not None:
             report.statement_score = statement_score
 
-        if telegram_score is not None:
-            report.telegram_score = telegram_score
+        if telegram_delta is not None:
+            report.telegram_delta = telegram_delta
+
+        if telegram_risk is not None:
+            report.telegram_risk = telegram_risk
+
+        if telegram_comment is not None:
+            report.telegram_comment = telegram_comment
+
+        if telegram_factors is not None:
+            report.telegram_factors = telegram_factors
 
         if comment_from_ai is not None:
             report.comment_from_ai = comment_from_ai
@@ -69,7 +81,7 @@ class ReportRepository:
         combined = combine_scores(
             report.survey_score,
             report.statement_score,
-            report.telegram_score,
+            report.telegram_delta,
         )
 
         if combined is not None:

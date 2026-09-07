@@ -1,6 +1,6 @@
 from app.db.base import Base
 from datetime import datetime
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Numeric, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -37,8 +37,32 @@ class ReportModel(Base):
         nullable=True,
     )
 
-    telegram_score: Mapped[float | None] = mapped_column(
+    # Telegram — не балл, а ПОПРАВКА −25..+25 к среднему двух веток выше
+    # (см. app/services/score_combination.py).
+    telegram_delta: Mapped[float | None] = mapped_column(
         Numeric(5, 2),
+        nullable=True,
+    )
+
+    # "low" | "medium" | "high" | "insufficient_data" — считается отдельно
+    # от дельты: стабильная работа плюс еженедельные ставки дают почти
+    # нулевую поправку, но риск обязан остаться видимым.
+    telegram_risk: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    telegram_comment: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    # Разбивка поправки по категориям из ответа tg-ai:
+    # [{"category": "gambling", "contribution": -7.6, "evidence_count": 4}, ...]
+    # Хранится как есть, чтобы фронт мог показать, из чего сложилась
+    # поправка, и построить по негативным факторам рекомендации.
+    telegram_factors: Mapped[list | None] = mapped_column(
+        JSON,
         nullable=True,
     )
 

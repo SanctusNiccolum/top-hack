@@ -11,6 +11,8 @@ asyncpg==0.29.0
 telethon>=1.44.0
 # Нужен FastAPI для приёма multipart/form-data (загрузка PDF-выписки).
 python-multipart>=0.0.9
+# Для обращения к сервису tg-ai (анализ Telegram через GigaChat).
+httpx>=0.27
 
 # Зависимости statement_scoring/ — он живёт в этом же образе и
 # запускается подпроцессом (см. app/statement_scoring/runner.py).

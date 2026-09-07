@@ -7,9 +7,9 @@ import { themeConfig } from './theme/config.js';
 import RegistrationModal from './components/RegistrationModal';
 import AccountPage from './pages/AccountPage';
 import ProfilePage from './pages/ProfilePage';
+import StatementUploadPage from './pages/StatementUploadPage';
 import RatingPage from './pages/RatingPage';
 import SurveyPage from './pages/SurveyPage';
-import StatementUploadPage from './pages/StatementUploadPage';
 import TelegramAnalysisPage from './pages/TelegramAnalysisPage';
 
 
@@ -77,7 +77,7 @@ Button.propTypes = {
 };
 Button.defaultProps = { variant: 'orange', fontSize: 14, paddingX: 20, paddingY: 10, radius: 8, minWidth: 0 };
 
-function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight, buttonFontSize, buttonPaddingX, buttonPaddingY, buttonRadius, buttonGap, onOpenRegistration }) {
+function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight, buttonFontSize, buttonPaddingX, buttonPaddingY, buttonRadius, buttonGap, onOpenRegistration, onOpenLogin }) {
   return (
     <section className="hero" style={{ '--hero-top': `${topPadding}px`, '--hero-bottom': `${bottomPadding}px`, '--hero-title-size': `${heroTitleSize}px`, '--hero-lead-size': `${leadSize}px`, '--hero-art-height': `${artMinHeight}px`, '--hero-button-gap': `${buttonGap}px` }}>
       <Section>
@@ -88,7 +88,7 @@ function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight
             <p className="hero-lead">Пройдите короткий опрос —<br className="desktop" /> и за 5 минут узнайте, по плечу ли Вам кредит.</p>
             <div className="hero-actions">
                   <Button onClick={onOpenRegistration} fontSize={16} paddingX={24} paddingY={13} radius={buttonRadius}>Пройти опрос</Button>
-                  <Button onClick={onOpenRegistration} variant="yellow" fontSize={16} paddingX={24} paddingY={13} radius={buttonRadius}>Вход</Button>
+                  <Button onClick={onOpenLogin} variant="yellow" fontSize={16} paddingX={24} paddingY={13} radius={buttonRadius}>Вход</Button>
             </div>
             <p className="privacy">Бесплатно·Конфиденциально</p>
           </div>
@@ -106,7 +106,7 @@ function Hero({ heroTitleSize, leadSize, topPadding, bottomPadding, artMinHeight
 Hero.propTypes = {
   heroTitleSize: PropTypes.number, leadSize: PropTypes.number, topPadding: PropTypes.number, bottomPadding: PropTypes.number,
   artMinHeight: PropTypes.number, buttonFontSize: PropTypes.number, buttonPaddingX: PropTypes.number, buttonPaddingY: PropTypes.number,
-  buttonRadius: PropTypes.number, buttonGap: PropTypes.number, onOpenRegistration: PropTypes.func.isRequired
+  buttonRadius: PropTypes.number, buttonGap: PropTypes.number, onOpenRegistration: PropTypes.func.isRequired, onOpenLogin: PropTypes.func.isRequired
 };
 Hero.defaultProps = { heroTitleSize: 71, leadSize: 20, topPadding: 55, bottomPadding: 28, artMinHeight: 320, buttonFontSize: 14, buttonPaddingX: 20, buttonPaddingY: 10, buttonRadius: 8, buttonGap: 10 };
 
@@ -204,11 +204,19 @@ Footer.defaultProps = { height: 76, paddingX: 16, fontSize: 11 };
 
 export default function App(props) {
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
+  const [modalMode, setModalMode] = useState('registration');
   const [isAuthenticated, setIsAuthenticated] = useState(() => (
     localStorage.getItem('isAuthenticated') === 'true' || Boolean(localStorage.getItem('user'))
   ));
   const navigate = useNavigate();
-  const openRegistration = () => setIsRegistrationOpen(true);
+  const openRegistration = () => {
+    setModalMode('registration');
+    setIsRegistrationOpen(true);
+  };
+  const openLogin = () => {
+    setModalMode('login');
+    setIsRegistrationOpen(true);
+  };
   const closeRegistration = () => setIsRegistrationOpen(false);
   const handleLogin = (userData) => {
     setIsAuthenticated(true);
@@ -218,6 +226,20 @@ export default function App(props) {
     localStorage.setItem('user', JSON.stringify(registeredUser));
     navigate('/survey', { state: { user: registeredUser } });
   };
+  // Куда вести после входа, решает бэкенд: он возвращает is_ended.
+  // Без заполненной анкеты расчёт рейтинга ответит ошибкой.
+  const handleSignedIn = (userData, { isEnded } = {}) => {
+    setIsAuthenticated(true);
+    localStorage.setItem('isAuthenticated', 'true');
+    setIsRegistrationOpen(false);
+
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = { ...storedUser, ...userData };
+    localStorage.setItem('user', JSON.stringify(user));
+
+    navigate(isEnded ? '/rating' : '/survey', { state: { user } });
+  };
+
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem('isAuthenticated');
@@ -258,14 +280,14 @@ export default function App(props) {
       '--body-font-size': `${bodyFontSize}px`,
       '--body-line-height': bodyLineHeight,
     }}>
-      <Header {...sectionProps} onLogin={openRegistration} />
+      <Header {...sectionProps} onLogin={openLogin} />
       <main>
-        <Hero {...sectionProps} onOpenRegistration={openRegistration} />
+        <Hero {...sectionProps} onOpenRegistration={openRegistration} onOpenLogin={openLogin} />
         <Features {...sectionProps} />
         <FAQ {...sectionProps} onOpenRegistration={openRegistration} />
       </main>
       <Footer {...sectionProps} />
-      <RegistrationModal isOpen={isRegistrationOpen} onClose={closeRegistration} onSuccess={handleLogin} />
+      <RegistrationModal isOpen={isRegistrationOpen} mode={modalMode} onClose={closeRegistration} onSuccess={handleSignedIn} />
     </div>
   );
 
@@ -275,6 +297,8 @@ export default function App(props) {
       <Route path="/profile" element={isAuthenticated ? <AccountPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
       <Route path="/rating" element={isAuthenticated ? <RatingPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
       <Route path="/telegram-analysis" element={isAuthenticated ? <TelegramAnalysisPage /> : <Navigate to="/" replace />} />
+      {/* Роут /telegram-chats ждёт TelegramChatsPage — фронтендер её ещё
+          не прислал, без файла сборка падает. Вернуть вместе с ней. */}
       <Route path="/statement" element={isAuthenticated ? <StatementUploadPage /> : <Navigate to="/" replace />} />
       <Route path="*" element={homePage} />
     </Routes>

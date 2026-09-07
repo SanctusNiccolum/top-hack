@@ -64,6 +64,15 @@ my.telegram.org. Изначально это было заблокировано
 DATABASE_URL="postgresql://..." python -m telegram_parser.export_texts <user_id>
 ```
 
+> **Про запуск.** Отдельного docker-стека у парсера больше нет: он поднимал
+> собственный Postgres на том же порту 5432 и конфликтовал с основным.
+> Парсер живёт в образе бэкенда и запускается подпроцессом — см.
+> `backend/app/telegram_analysis/runner.py`. Поднимается всё одной командой
+> `docker compose up` из корня репозитория; таблицы создаёт alembic.
+> Дев-скрипты в `dev_tools/`, зовущие `docker compose run parser`,
+> устарели — рабочий путь теперь через API (`/telegram/login/*`,
+> `/telegram/analyze`).
+
 Печатает в stdout:
 ```json
 {

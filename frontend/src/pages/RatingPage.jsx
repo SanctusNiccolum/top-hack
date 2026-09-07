@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createReport } from '../api';
+import { buildRecommendations } from '../utils/recommendations';
 
 const readStored = (key, fallback) => {
   try {
@@ -57,9 +58,30 @@ const RatingPage = ({ onLogout }) => {
   // а не как ноль баллов (в итог она и не входит).
   const branches = [
     ['Анкета', report.survey_score],
-    ['Банковская выписка', report.statement_score],
-    ['Telegram', report.telegram_score]
+    ['Банковская выписка', report.statement_score]
   ];
+
+  // Telegram — не балл, а поправка к среднему двух веток выше, поэтому
+  // и показываем его отдельно и со знаком.
+  const tgDelta = report.telegram_delta === null || report.telegram_delta === undefined
+    ? null
+    : Number(report.telegram_delta);
+
+  // Подписки считаются отдельно от LLM и приходят в общем списке
+  // факторов с префиксом subscription_ — показываем их отдельной строкой.
+  const subscriptionFactors = (report.telegram_factors || []).filter(
+    (factor) => String(factor.category).startsWith('subscription_')
+  );
+  const subscriptionDelta = subscriptionFactors.reduce(
+    (sum, factor) => sum + Number(factor.contribution), 0
+  );
+
+  const riskLabels = {
+    low: 'низкий',
+    medium: 'средний',
+    high: 'высокий',
+    insufficient_data: 'данных недостаточно'
+  };
   // answers может не быть (зашли на /rating напрямую, без прохождения
   // анкеты в этой сессии браузера) — скор всё равно придёт с бэкенда,
   // поэтому страницу не роняем, а показываем её без блока факторов.
@@ -69,12 +91,10 @@ const RatingPage = ({ onLogout }) => {
   const firstName = nameParts.length > 1 ? nameParts[1] : nameParts[0];
   const age = Number.parseInt(survey.age, 10) || 18;
   const ageWord = age % 10 === 1 && age % 100 !== 11 ? 'год' : [2, 3, 4].includes(age % 10) && ![12, 13, 14].includes(age % 100) ? 'года' : 'лет';
-  // Объяснение приходит с бэкенда (по банковской выписке — разбор по
-  // коэффициентам). Раньше советы были захардкожены на клиенте.
-  const recommendations = (report.comment_from_ai || '')
-    .split('\n')
-    .filter((line) => line.trim())
-    .map((line) => ({ title: '', text: line }));
+  // Рекомендации строятся из того, что реально посчитано: негативных
+  // факторов Telegram-анализа и разбора по банковской выписке.
+  // Раньше советы были захардкожены на клиенте.
+  const recommendations = buildRecommendations(report);
   const income = parseInt(survey.monthlyIncome, 10) || 0;
   const regularIncome = ['Каждую неделю', '1-2 раза в месяц'].includes(survey.incomeFrequency);
   const hasRiskOperations = survey.paymentMethod === 'Криптовалюта' || Boolean(survey.paymentOther);
@@ -130,6 +150,41 @@ const RatingPage = ({ onLogout }) => {
                 </div>
               </div>
             ))}
+          </section>
+          <section className="profile-factors rating-telegram">
+            <h2>Поправка по Telegram</h2>
+            {tgDelta === null ? (
+              <p className="hint">
+                Анализ Telegram не проводился — подключите Telegram, чтобы
+                уточнить оценку.
+              </p>
+            ) : (
+              <>
+                <div className="rating-factor-header">
+                  <span>Изменение оценки</span>
+                  <strong className={tgDelta < 0 ? 'negative' : 'positive'}>
+                    {tgDelta > 0 ? '+' : ''}{tgDelta.toFixed(1)} балла
+                  </strong>
+                </div>
+                <div className="rating-factor-header">
+                  <span>Уровень риска</span>
+                  <strong className={report.telegram_risk === 'high' ? 'negative' : 'positive'}>
+                    {riskLabels[report.telegram_risk] || report.telegram_risk}
+                  </strong>
+                </div>
+                {subscriptionFactors.length > 0 && (
+                  <div className="rating-factor-header">
+                    <span>в т.ч. по подпискам на каналы</span>
+                    <strong className={subscriptionDelta < 0 ? 'negative' : 'positive'}>
+                      {subscriptionDelta > 0 ? '+' : ''}{subscriptionDelta.toFixed(1)}
+                    </strong>
+                  </div>
+                )}
+                {report.telegram_comment && (
+                  <p className="hint">{report.telegram_comment}</p>
+                )}
+              </>
+            )}
           </section>
           {answers && <section className="profile-factors rating-factors">
             <h2>Факторы оценки</h2>

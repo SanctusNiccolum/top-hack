@@ -5,9 +5,11 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
+from app.db.models.consent import ConsentModel
 from app.db.models.user import UserModel
 from app.db.repositories.report import ReportRepository
 from app.db.session import get_session
@@ -47,6 +49,25 @@ async def upload_statement(
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
 ):
+    # Выписка — такие же персональные данные, как переписка, поэтому
+    # гейт согласия здесь такой же, как на /telegram/analyze.
+    consent = await db.execute(
+        select(ConsentModel).where(
+            ConsentModel.user_id == current_user.user_id,
+            ConsentModel.consent_type == "bank_statement",
+            ConsentModel.revoked_at.is_(None),
+        )
+    )
+
+    if consent.scalars().first() is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Нет согласия на обработку банковской выписки. Сначала "
+                'вызовите POST /consent {"consent_type": "bank_statement"}'
+            ),
+        )
+
     content = await file.read()
 
     if not content:

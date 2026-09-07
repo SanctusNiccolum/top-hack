@@ -57,13 +57,13 @@ const AccountPage = ({ onLogout }) => {
             </section>
             <section className="account-card account-offer-card">
               <h2>У Вас есть минутка?</h2>
-              <p>Для повышения точности расчёта вашей процентной ставки нам требуется обработать метаданные ваших Telegram-чатов. Речь идёт исключительно о статистике: частота и время сообщений. Содержание переписок останется недоступным для системы. Это займёт пару минут и позволит нам предложить вам более выгодные условия, чем при стандартном скоринге. Ваши данные не передаются третьим лицам и удаляются сразу после завершения расчёта.</p>
+              <p>Для повышения точности расчёта мы проанализируем тексты ваших сообщений в тех чатах, которые вы сами выберете. Анализ ищет признаки занятости, регулярного дохода и долговой нагрузки; из сообщений перед сохранением вырезаются телефоны, адреса почты и упоминания пользователей. Вы в любой момент можете отозвать согласие. Это займёт пару минут и позволит предложить более выгодные условия, чем при стандартном скоринге.</p>
               <button type="button" onClick={() => navigate('/telegram-analysis')}>Перейти к форме</button>
             </section>
             <section className="account-card account-files-card">
               <h2>Файлы</h2>
               <div className="account-file-row"><span>Справка о расчетах по НПД за последний год</span>{fileAnswers.incomeStatement ? <button type="button">Вы прикрепили!</button> : <label className="account-file-action">Прикрепить<input type="file" onChange={(event) => handleFileChange('incomeStatement', event)} /></label>}</div>
-              <div className="account-file-row"><span>Выписка с карты за последние 3 месяца</span>{fileAnswers.bankStatement ? <button type="button">Вы прикрепили!</button> : <label className="account-file-action">Прикрепить<input type="file" onChange={(event) => handleFileChange('bankStatement', event)} /></label>}</div>
+              <div className="account-file-row"><span>Выписка с карты за последние 3 месяца</span><button type="button" onClick={() => navigate('/statement')}>Загрузить и проанализировать</button></div>
               <div className="account-file-row"><span>Ссылка на Telegram-канал</span><button type="button">{attachLabel(fileAnswers.tgLink, 'Отправить')}</button></div>
             </section>
           </div>

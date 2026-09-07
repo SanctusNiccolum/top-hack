@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
@@ -6,10 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, get_user_repository
 from app.db.models.consent import ConsentModel
 from app.db.models.user import UserModel
+from app.db.repositories.report import ReportRepository
 from app.db.repositories.user import UserRepository
 from app.db.session import get_session
 from app.telegram_analysis import login as telegram_login
+from app.telegram_analysis.ai_client import (
+    TelegramAIUnavailable,
+    analyze_texts,
+)
 from app.telegram_analysis.runner import start_parser
+from app.telegram_analysis.subscriptions import subscription_delta
 from app.telegram_analysis.schemas import (
     TelegramAnalyzeRequest,
     TelegramAnalyzeResponse,
@@ -22,6 +31,7 @@ from app.telegram_analysis.schemas import (
     TelegramLoginPhoneRequest,
     TelegramLoginPhoneResponse,
     TelegramLoginResult,
+    TelegramScoreResponse,
 )
 
 router = APIRouter(
@@ -279,3 +289,100 @@ async def analyze(
         )
 
     return TelegramAnalyzeResponse(status="started")
+
+
+@router.post(
+    "/score",
+    response_model=TelegramScoreResponse,
+)
+async def score_telegram(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Прогоняет собранные сообщения через ИИ-модуль и записывает
+    поправку к скору.
+
+    Вызывается ПОСЛЕ того, как отработал парсер (/telegram/analyze):
+    берёт уже сохранённые сообщения, поэтому Telegram-сессия здесь
+    больше не нужна — она к этому моменту уже отозвана.
+    """
+    if current_user.tg_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telegram не подключён — сначала пройдите /telegram/login/*",
+        )
+
+    rows = (
+        await db.execute(
+            text("SELECT text FROM messages WHERE user_id = :tg_id"),
+            {"tg_id": current_user.tg_user_id},
+        )
+    ).all()
+
+    texts = [row.text for row in rows]
+
+    if not texts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нет собранных сообщений — сначала запустите /telegram/analyze",
+        )
+
+    try:
+        result = await analyze_texts(current_user.tg_user_id, texts)
+    except TelegramAIUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Сервис ИИ-анализа недоступен: {exc}",
+        )
+
+    llm_delta = float(result.get("score_delta") or 0.0)
+    explanation = result.get("explanation_ru") or ""
+    risk = result.get("risk_level") or "insufficient_data"
+
+    # Третий сигнал кейса — подписки на каналы. Считается отдельно от LLM
+    # (это факт, а не высказывание) и складывается с её поправкой.
+    subs_delta, subs_factors = await subscription_delta(
+        db, current_user.tg_user_id
+    )
+
+    delta = llm_delta + float(subs_delta)
+
+    if subs_factors:
+        positive = [f for f in subs_factors if f["contribution"] > 0]
+        negative = [f for f in subs_factors if f["contribution"] < 0]
+
+        parts = []
+        if positive:
+            parts.append(
+                "В пользу говорят " + ", ".join(f["title_ru"] for f in positive)
+            )
+        if negative:
+            parts.append(
+                "Настораживают " + ", ".join(f["title_ru"] for f in negative)
+            )
+
+        explanation = (explanation + " " + ". ".join(parts) + ".").strip()
+
+    coverage = result.get("coverage") or {}
+    analyzed = int(coverage.get("messages_analyzed") or 0)
+
+    report_repository = ReportRepository(db)
+
+    await report_repository.create_or_update(
+        user_id=current_user.user_id,
+        telegram_delta=Decimal(str(round(delta, 2))),
+        telegram_risk=risk,
+        telegram_comment=explanation,
+        telegram_factors=(result.get("factors") or []) + subs_factors,
+        date=datetime.now(timezone.utc),
+    )
+
+    await db.commit()
+
+    return TelegramScoreResponse(
+        status=result.get("status", "error"),
+        score_delta=delta,
+        risk_level=risk,
+        explanation_ru=explanation,
+        messages_analyzed=analyzed,
+    )

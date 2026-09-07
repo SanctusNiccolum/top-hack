@@ -32,14 +32,36 @@ services:
       - TELEGRAM_PARSER_CWD=/app
       - STATEMENT_SCORING_DIR=/app/statement_scoring/src
       - STATEMENT_UPLOAD_DIR=/app/uploads
+      - TG_AI_URL=http://tg-ai:8000
     volumes:
       # Загруженные выписки переживают пересборку контейнера.
       - statement_uploads:/app/uploads
     depends_on:
       - db
+      - tg-ai
 
     ports:
     - "8001:8000"
+
+  # Анализ Telegram через GigaChat — отдельным сервисом: свои
+  # зависимости, свой ключ и внешний API, чьи таймауты не должны
+  # блокировать основной бэкенд.
+  tg-ai:
+    build: ./tg-ai
+    # Если GigaChat не резолвится из контейнера, чинить нужно DNS на
+    # машине, а не подставлять сюда IP: правила исключений VPN-клиента
+    # сопоставляются ПО ДОМЕНУ из DNS-запроса, поэтому обращение напрямую
+    # по адресу такое правило не активирует и трафик уходит в общий
+    # маршрут (проверено: OAuth проходит, а TLS до api.giga.chat рвётся).
+    env_file:
+      # required: false — без этого файла (а он в .gitignore, там ключ)
+      # compose падал бы целиком у всех, кто просто склонировал репозиторий.
+      # Сервис поднимется и без ключа: модуль штатно вернёт status=error и
+      # нулевую поправку, скоринг посчитается по остальным веткам.
+      - path: ./tg-ai/.env
+        required: false
+    ports:
+      - "8002:8000"
 
 volumes:
   # minio_data_hack:

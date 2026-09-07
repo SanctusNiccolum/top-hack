@@ -16,3 +16,7 @@ backend/test_statement.pdf
 
 # Node
 node_modules/
+
+# Тестовые прогоны tg-ai (входы и результаты), генерируются вручную
+tg-ai/*_input.json
+tg-ai/*_out.json

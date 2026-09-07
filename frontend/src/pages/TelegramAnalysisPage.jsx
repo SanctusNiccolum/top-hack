@@ -5,6 +5,7 @@ import {
   telegramAnalyze,
   telegramChats,
   telegramSendCode,
+  telegramScore,
   telegramStatus,
   telegramSubmitCode,
   telegramSubmitPassword
@@ -44,6 +45,7 @@ const TelegramAnalysisPage = () => {
 
   const [consentGiven, setConsentGiven] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [aiResult, setAiResult] = useState(null);
   const pollTimer = useRef(null);
 
   useEffect(() => () => clearInterval(pollTimer.current), []);
@@ -119,8 +121,20 @@ const TelegramAnalysisPage = () => {
         try {
           const data = await telegramStatus();
           setProgress(data);
+
           if (data.status === 'done' || data.status === 'failed') {
             clearInterval(pollTimer.current);
+          }
+
+          // Разбор закончен — сразу считаем поправку к скору. Отдельной
+          // кнопки не делаем: пользователь уже согласился на анализ,
+          // лишний шаг только оборвал бы сценарий на полпути.
+          if (data.status === 'done') {
+            try {
+              setAiResult(await telegramScore());
+            } catch (err) {
+              setAiResult({ status: 'error', explanation_ru: err.message });
+            }
           }
         } catch {
           clearInterval(pollTimer.current);
@@ -130,8 +144,8 @@ const TelegramAnalysisPage = () => {
   };
 
   return (
-    <main className="telegram-analysis-page">
-      <section className="telegram-analysis-card" aria-labelledby="telegram-analysis-title">
+    <main className="telegram-analysis-page telegram-chats-page">
+      <section className="telegram-analysis-card telegram-chats-card" aria-labelledby="telegram-analysis-title">
         {step === STEPS.PHONE && (
           <>
             <h1 id="telegram-analysis-title">Введите номер телефона Telegram</h1>
@@ -194,29 +208,28 @@ const TelegramAnalysisPage = () => {
 
         {step === STEPS.CHATS && (
           <>
-            <h1 id="telegram-analysis-title">Выберите, что анализировать</h1>
-            <p className="hint">
-              Анализируются только выбранные Вами чаты. Ваши сообщения очищаются
-              от телефонов, почт и упоминаний перед сохранением.
-            </p>
-            <ul className="chat-list">
+            <h1 id="telegram-analysis-title">Выберите чаты для проведения анализа</h1>
+            <div className="telegram-chat-list">
               {chats.map((chat) => (
-                <li key={chat.chat_id}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(chat.chat_id)}
-                      onChange={() => toggleChat(chat.chat_id)}
-                    />
-                    <span className="chat-name">{chat.name || chat.chat_id}</span>
-                    <span className="chat-type">
-                      {chat.type === 'subscription' ? 'подписка' : 'мои сообщения'}
-                    </span>
-                  </label>
-                </li>
+                <label className="telegram-chat-option" key={chat.chat_id}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(chat.chat_id)}
+                    onChange={() => toggleChat(chat.chat_id)}
+                  />
+                  <span className="telegram-chat-name">{chat.name || chat.chat_id}</span>
+                  <span
+                    className={`telegram-chat-badge telegram-chat-badge-${
+                      chat.type === 'subscription' ? 'investments' : 'personal'
+                    }`}
+                  >
+                    {chat.type === 'subscription' ? 'Подписка' : 'Мои сообщения'}
+                  </span>
+                </label>
               ))}
-            </ul>
-            <label className="consent-check">
+            </div>
+
+            <label className="telegram-chats-consent">
               <input
                 type="checkbox"
                 checked={consentGiven}
@@ -227,13 +240,28 @@ const TelegramAnalysisPage = () => {
                 платёжеспособности и понимаю, что могу отозвать согласие.
               </span>
             </label>
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={busy || selected.size === 0 || !consentGiven}
-            >
-              {busy ? 'Запускаем…' : `Анализировать (${selected.size})`}
-            </button>
+
+            <div className="telegram-chats-actions">
+              <button
+                type="button"
+                className="telegram-chats-back"
+                onClick={() => navigate('/profile')}
+              >
+                <span aria-hidden="true">←</span> Вернуться в профиль
+              </button>
+              <button
+                type="button"
+                className="telegram-chats-confirm"
+                onClick={handleAnalyze}
+                disabled={busy || selected.size === 0 || !consentGiven}
+              >
+                {busy ? 'Запускаем…' : 'Подтвердить'} <span aria-hidden="true">→</span>
+              </button>
+            </div>
+
+            <p className="telegram-chats-hint" aria-live="polite">
+              {selected.size ? `Выбрано чатов: ${selected.size}` : 'Выберите хотя бы один чат'}
+            </p>
           </>
         )}
 
@@ -252,6 +280,32 @@ const TelegramAnalysisPage = () => {
                 <p className="hint">
                   Сообщений собрано: {progress.messages_collected} · Подписок: {progress.subscriptions_collected}
                 </p>
+                {progress.status === 'done' && !aiResult && (
+                  <p>Анализируем сообщения ИИ…</p>
+                )}
+
+                {aiResult && (
+                  <div className="telegram-ai-result">
+                    {aiResult.status === 'ok' ? (
+                      <>
+                        <p>
+                          <strong>
+                            {aiResult.score_delta > 0 ? '+' : ''}
+                            {Number(aiResult.score_delta).toFixed(1)} балла
+                          </strong>{' '}
+                          к оценке
+                        </p>
+                        <p className="hint">{aiResult.explanation_ru}</p>
+                      </>
+                    ) : (
+                      <p className="hint">
+                        Анализ недоступен: {aiResult.explanation_ru}. Оценка по
+                        этому источнику не изменена.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {progress.status === 'done' && (
                   <button type="button" onClick={() => navigate('/rating')}>
                     Перейти к рейтингу
