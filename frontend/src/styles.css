@@ -302,7 +302,7 @@ h2 {
   border-radius:var(--note-radius, 11px);
   padding: var(--note-padding, 14px);
   width: min(100%, var(--note-width, 300px));
-  font-size:14px;
+  font-size:15px;
   line-height:1.23;
   overflow-wrap:anywhere;
   box-shadow: 0 8px 18px rgba(0,80,50,.04);
@@ -429,11 +429,11 @@ footer { background: var(--black-color, #050505);color:white;min-height:var(--fo
   .hero { padding:34px 0 20px; }
   .hero h1 { font-size:2.65rem; }
   .hero-art { min-height:185px; transform:scale(.76); transform-origin:center top; margin-bottom:8px; }
-  .features-section, .faq-section { padding:45px 0; }
+  .features-section, .faq-section { padding:55px 0; }
   h2 { margin-bottom:28px; }
   .feature-layout { grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr) minmax(0, .8fr); gap:4px; width:100%; }
   .feature-column { display:flex; flex-direction:column; gap:8px; }
-  .feature-column.left { order:1; }.feature-center{order:2; min-width:0;}.feature-column.right{order:3}
+  .feature-column.left { order:1; gap:27px; }.feature-center{order:2; min-width:0;}.feature-column.right{order:3}
   .feature-note { width:100%; padding:8px; border-radius:8px; font-size:8.5px; line-height:1.15; }
   .feature-note h3 { margin-bottom:3px; font-size:10.5px; line-height:1.05; }
   .feature-note p { margin-bottom:4px; }
